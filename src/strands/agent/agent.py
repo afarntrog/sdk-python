@@ -374,7 +374,7 @@ class Agent:
         all_tools = self.tool_registry.get_all_tools_config()
         return list(all_tools.keys())
 
-    def __call__(self, prompt: AgentInput = None, **kwargs: Any) -> AgentResult:
+    def __call__(self, prompt: AgentInput = None, output_type: Optional[Type[BaseModel]] = None, **kwargs: Any) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
 
         This method implements the conversational interface with multiple input patterns:
@@ -389,6 +389,8 @@ class Agent:
                 - list[ContentBlock]: Multi-modal content blocks
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
+            output_type: Optional Pydantic model class for structured output parsing.
+                When provided, the agent will attempt to parse the response into this model.
             **kwargs: Additional parameters to pass through the event loop.
 
         Returns:
@@ -398,16 +400,17 @@ class Agent:
                 - message: The final message from the model
                 - metrics: Performance metrics from the event loop
                 - state: The final state of the event loop
+                - structured_output: Parsed structured output (when output_type is provided)
         """
 
         def execute() -> AgentResult:
-            return asyncio.run(self.invoke_async(prompt, **kwargs))
+            return asyncio.run(self.invoke_async(prompt, output_type=output_type, **kwargs))
 
         with ThreadPoolExecutor() as executor:
             future = executor.submit(execute)
             return future.result()
 
-    async def invoke_async(self, prompt: AgentInput = None, **kwargs: Any) -> AgentResult:
+    async def invoke_async(self, prompt: AgentInput = None, output_type: Optional[Type[BaseModel]] = None, **kwargs: Any) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
 
         This method implements the conversational interface with multiple input patterns:
@@ -422,6 +425,7 @@ class Agent:
                 - list[ContentBlock]: Multi-modal content blocks
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
+            output_type: Optional Pydantic model class for structured output parsing.
             **kwargs: Additional parameters to pass through the event loop.
 
         Returns:
@@ -431,8 +435,9 @@ class Agent:
                 - message: The final message from the model
                 - metrics: Performance metrics from the event loop
                 - state: The final state of the event loop
+                - structured_output: Parsed structured output (when output_type is provided)
         """
-        events = self.stream_async(prompt, **kwargs)
+        events = self.stream_async(prompt, output_type=output_type, **kwargs)
         async for event in events:
             _ = event
 
@@ -527,6 +532,7 @@ class Agent:
     async def stream_async(
         self,
         prompt: AgentInput = None,
+        output_type: Optional[Type[BaseModel]] = None,
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
         """Process a natural language prompt and yield events as an async iterator.
@@ -569,6 +575,10 @@ class Agent:
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)
 
+        # Add output_type to kwargs for event loop processing
+        if output_type is not None:
+            kwargs["output_type"] = output_type
+
         self.trace_span = self._start_agent_trace_span(messages)
 
         with trace_api.use_span(self.trace_span):
@@ -583,7 +593,7 @@ class Agent:
                         callback_handler(**as_dict)
                         yield as_dict
 
-                result = AgentResult(*event["stop"])
+                result = AgentResult(*event["stop"], structured_output=event.get("structured_output"))
                 callback_handler(result=result)
                 yield AgentResultEvent(result=result).as_dict()
 

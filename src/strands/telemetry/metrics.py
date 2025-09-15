@@ -162,6 +162,10 @@ class EventLoopMetrics:
         traces: List of execution traces.
         accumulated_usage: Accumulated token usage across all model invocations.
         accumulated_metrics: Accumulated performance metrics across all model invocations.
+        structured_output_attempts: Number of structured output parsing attempts.
+        structured_output_successes: Number of successful structured output parses.
+        structured_output_strategy_used: Strategy used for the last structured output attempt.
+        structured_output_parsing_time: Total time spent on structured output parsing in seconds.
     """
 
     cycle_count: int = 0
@@ -170,6 +174,10 @@ class EventLoopMetrics:
     traces: List[Trace] = field(default_factory=list)
     accumulated_usage: Usage = field(default_factory=lambda: Usage(inputTokens=0, outputTokens=0, totalTokens=0))
     accumulated_metrics: Metrics = field(default_factory=lambda: Metrics(latencyMs=0))
+    structured_output_attempts: int = 0
+    structured_output_successes: int = 0
+    structured_output_strategy_used: Optional[str] = None
+    structured_output_parsing_time: float = 0.0
 
     @property
     def _metrics_client(self) -> "MetricsClient":
@@ -288,6 +296,27 @@ class EventLoopMetrics:
         self._metrics_client.event_loop_latency.record(metrics["latencyMs"])
         self.accumulated_metrics["latencyMs"] += metrics["latencyMs"]
 
+    def record_structured_output_attempt(self, strategy: str, parsing_time: float, success: bool) -> None:
+        """Record a structured output parsing attempt.
+        
+        Args:
+            strategy: The strategy used for structured output (e.g., 'native', 'json_schema', 'tool_calling', 'prompt_based').
+            parsing_time: Time spent on parsing in seconds.
+            success: Whether the parsing was successful.
+        """
+        self.structured_output_attempts += 1
+        self.structured_output_parsing_time += parsing_time
+        self.structured_output_strategy_used = strategy
+        
+        if success:
+            self.structured_output_successes += 1
+        
+        # Record OpenTelemetry metrics
+        self._metrics_client.structured_output_attempts.add(1, {"strategy": strategy})
+        self._metrics_client.structured_output_parsing_time.record(parsing_time, {"strategy": strategy})
+        if success:
+            self._metrics_client.structured_output_successes.add(1, {"strategy": strategy})
+
     def get_summary(self) -> Dict[str, Any]:
         """Generate a comprehensive summary of all collected metrics.
 
@@ -320,6 +349,14 @@ class EventLoopMetrics:
             "traces": [trace.to_dict() for trace in self.traces],
             "accumulated_usage": self.accumulated_usage,
             "accumulated_metrics": self.accumulated_metrics,
+            "structured_output": {
+                "attempts": self.structured_output_attempts,
+                "successes": self.structured_output_successes,
+                "success_rate": (self.structured_output_successes / self.structured_output_attempts if self.structured_output_attempts > 0 else 0),
+                "strategy_used": self.structured_output_strategy_used,
+                "total_parsing_time": self.structured_output_parsing_time,
+                "average_parsing_time": (self.structured_output_parsing_time / self.structured_output_attempts if self.structured_output_attempts > 0 else 0),
+            },
         }
         return summary
 
@@ -449,6 +486,10 @@ class MetricsClient:
     event_loop_cache_read_input_tokens: Histogram
     event_loop_cache_write_input_tokens: Histogram
 
+    structured_output_attempts: Counter
+    structured_output_successes: Counter
+    structured_output_parsing_time: Histogram
+
     tool_call_count: Counter
     tool_success_count: Counter
     tool_error_count: Counter
@@ -506,4 +547,15 @@ class MetricsClient:
         )
         self.event_loop_cache_write_input_tokens = self.meter.create_histogram(
             name=constants.STRANDS_EVENT_LOOP_CACHE_WRITE_INPUT_TOKENS, unit="token"
+        )
+        
+        # Structured output metrics
+        self.structured_output_attempts = self.meter.create_counter(
+            name=constants.STRANDS_STRUCTURED_OUTPUT_ATTEMPTS, unit="Count"
+        )
+        self.structured_output_successes = self.meter.create_counter(
+            name=constants.STRANDS_STRUCTURED_OUTPUT_SUCCESSES, unit="Count"
+        )
+        self.structured_output_parsing_time = self.meter.create_histogram(
+            name=constants.STRANDS_STRUCTURED_OUTPUT_PARSING_TIME, unit="s"
         )

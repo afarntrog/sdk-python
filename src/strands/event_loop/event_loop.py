@@ -10,10 +10,12 @@ The event loop allows agents to:
 
 import asyncio
 import logging
+import time
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncGenerator
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Type
 
 from opentelemetry import trace as trace_api
+from pydantic import BaseModel
 
 from ..experimental.hooks import (
     AfterModelInvocationEvent,
@@ -22,6 +24,7 @@ from ..experimental.hooks import (
 from ..hooks import (
     MessageAddedEvent,
 )
+from ..structured_output.manager import StructuredOutputManager
 from ..telemetry.metrics import Trace
 from ..telemetry.tracer import get_tracer
 from ..tools._validator import validate_and_prepare_tools
@@ -271,7 +274,48 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
         logger.exception("cycle failed")
         raise EventLoopException(e, invocation_state["request_state"]) from e
 
-    yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"])
+    # Process structured output if requested
+    structured_output = None
+    output_type = invocation_state.get("output_type")
+    if output_type is not None:
+        parsing_start_time = time.time()
+        strategy_used = None
+        success = False
+        
+        try:
+            # Initialize structured output manager if not already present
+            if not hasattr(agent, 'structured_output_manager'):
+                agent.structured_output_manager = StructuredOutputManager()
+            
+            # Detect strategy that will be used
+            capabilities = agent.structured_output_manager.detect_provider_capabilities(agent.model)
+            strategy_used = capabilities[0] if capabilities else "unknown"
+            
+            # Execute structured output with the final message and conversation history
+            structured_output = await agent.structured_output_manager.execute_structured_output(
+                model=agent.model,
+                output_type=output_type,
+                messages=agent.messages,
+                system_prompt=agent.system_prompt
+            )
+            
+            success = structured_output is not None
+                    
+        except Exception as e:
+            # Don't break the agent loop if structured output fails
+            logger.warning(f"Structured output processing failed: {e}")
+            structured_output = None
+        finally:
+            # Record metrics regardless of success/failure
+            parsing_time = time.time() - parsing_start_time
+            if strategy_used:
+                agent.event_loop_metrics.record_structured_output_attempt(
+                    strategy=strategy_used,
+                    parsing_time=parsing_time,
+                    success=success
+                )
+
+    yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], structured_output)
 
 
 async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -> AsyncGenerator[TypedEvent, None]:
@@ -342,7 +386,7 @@ async def _handle_tool_execution(
     validate_and_prepare_tools(message, tool_uses, tool_results, invalid_tool_use_ids)
     tool_uses = [tool_use for tool_use in tool_uses if tool_use.get("toolUseId") not in invalid_tool_use_ids]
     if not tool_uses:
-        yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"])
+        yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
         return
 
     tool_events = agent.tool_executor._execute(
@@ -369,7 +413,7 @@ async def _handle_tool_execution(
 
     if invocation_state["request_state"].get("stop_event_loop", False):
         agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace)
-        yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"])
+        yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
         return
 
     events = recurse_event_loop(agent=agent, invocation_state=invocation_state)

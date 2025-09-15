@@ -7,6 +7,10 @@ STRANDS_TOOL_CALL_COUNT = "strands.tool.call_count"
 STRANDS_TOOL_SUCCESS_COUNT = "strands.tool.success_count"
 STRANDS_TOOL_ERROR_COUNT = "strands.tool.error_count"
 
+# Structured output counters
+STRANDS_STRUCTURED_OUTPUT_ATTEMPTS = "strands.structured_output.attempts"
+STRANDS_STRUCTURED_OUTPUT_SUCCESSES = "strands.structured_output.successes"
+
 # Histograms
 STRANDS_EVENT_LOOP_LATENCY = "strands.event_loop.latency"
 STRANDS_TOOL_DURATION = "strands.tool.duration"
@@ -15,3 +19,4 @@ STRANDS_EVENT_LOOP_INPUT_TOKENS = "strands.event_loop.input.tokens"
 STRANDS_EVENT_LOOP_OUTPUT_TOKENS = "strands.event_loop.output.tokens"
 STRANDS_EVENT_LOOP_CACHE_READ_INPUT_TOKENS = "strands.event_loop.cache_read.input.tokens"
 STRANDS_EVENT_LOOP_CACHE_WRITE_INPUT_TOKENS = "strands.event_loop.cache_write.input.tokens"
+STRANDS_STRUCTURED_OUTPUT_PARSING_TIME = "strands.structured_output.parsing_time"

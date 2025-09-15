@@ -5,9 +5,10 @@ providing a structured way to observe to different events of the event loop and
 agent lifecycle.
 """
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from typing_extensions import override
+from pydantic import BaseModel
 
 from ..telemetry import EventLoopMetrics
 from .citations import Citation
@@ -212,6 +213,7 @@ class EventLoopStopEvent(TypedEvent):
         message: Message,
         metrics: "EventLoopMetrics",
         request_state: Any,
+        structured_output: Optional["BaseModel"] = None,
     ) -> None:
         """Initialize with the final execution results.
 
@@ -220,8 +222,9 @@ class EventLoopStopEvent(TypedEvent):
             message: Final message from the model
             metrics: Execution metrics and performance data
             request_state: Final state of the agent execution
+            structured_output: Parsed structured output (when output_type is provided)
         """
-        super().__init__({"stop": (stop_reason, message, metrics, request_state)})
+        super().__init__({"stop": (stop_reason, message, metrics, request_state), "structured_output": structured_output})
 
     @property
     @override
