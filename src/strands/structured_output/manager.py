@@ -10,7 +10,6 @@ from ..types.content import Messages
 from .exceptions import StructuredOutputError
 from .strategies import (
     NativeStrategy,
-    JsonSchemaStrategy,
     ToolCallingStrategy,
     PromptBasedStrategy,
     StructuredOutputStrategy,
@@ -28,7 +27,6 @@ class StructuredOutputManager:
         """Initialize the structured output manager with all strategies."""
         self.strategies: Dict[str, StructuredOutputStrategy] = {
             'native': NativeStrategy(),
-            'json_schema': JsonSchemaStrategy(),
             'tool_calling': ToolCallingStrategy(),
             'prompt_based': PromptBasedStrategy()
         }
@@ -63,13 +61,9 @@ class StructuredOutputManager:
         """
         capabilities = []
         
-        # Check for native support (OpenAI, LiteLLM)
+        # Check for native structured output support (includes JSON schema providers)
         if self._has_native_support(model):
             capabilities.append('native')
-            
-        # Check for JSON schema support (Ollama, LlamaCpp)
-        if self._has_json_schema_support(model):
-            capabilities.append('json_schema')
             
         # Check for tool calling support (Bedrock, Anthropic)
         if self._has_tool_calling_support(model):
@@ -81,22 +75,13 @@ class StructuredOutputManager:
         return capabilities
     
     def _has_native_support(self, model: Model) -> bool:
-        """Check if model has native structured output support."""
+        """Check if model has structured output support via model.structured_output() method."""
         model_class_name = model.__class__.__name__
         
-        # OpenAI and LiteLLM have native structured output APIs
-        native_providers = ['OpenAIModel', 'LiteLLMModel']
+        # All providers that implement structured_output() method
+        native_providers = ['OpenAIModel', 'LiteLLMModel', 'OllamaModel', 'LlamaCppModel']
         
         return model_class_name in native_providers
-    
-    def _has_json_schema_support(self, model: Model) -> bool:
-        """Check if model supports JSON schema formatting."""
-        model_class_name = model.__class__.__name__
-        
-        # Ollama and LlamaCpp support JSON schema format parameter
-        json_schema_providers = ['OllamaModel', 'LlamaCppModel']
-        
-        return model_class_name in json_schema_providers
     
     def _has_tool_calling_support(self, model: Model) -> bool:
         """Check if model supports tool calling for structured output."""

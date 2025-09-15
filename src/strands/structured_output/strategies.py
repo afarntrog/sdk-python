@@ -46,7 +46,10 @@ class StructuredOutputStrategy(ABC):
 
 
 class NativeStrategy(StructuredOutputStrategy):
-    """Strategy for providers with native structured output support (OpenAI, LiteLLM)."""
+    """Strategy for providers with structured output support via model.structured_output() method.
+    
+    See: https://github.com/afarntrog/sdk-python/blob/6ccc8e73636fff929a89793bf470dc511727c480/src/strands/models/openai.py#L456z
+    """
     
     async def execute(
         self,
@@ -55,7 +58,7 @@ class NativeStrategy(StructuredOutputStrategy):
         messages: Messages,
         system_prompt: Optional[str] = None
     ) -> Optional[T]:
-        """Use provider's native structured output API."""
+        """Delegate to the model's structured_output method."""
         provider_name = model.__class__.__name__
         try:
             # Validate that the model has the structured_output method
@@ -66,8 +69,8 @@ class NativeStrategy(StructuredOutputStrategy):
                     strategy="native"
                 )
             
-            # Use the existing model.structured_output() method for native providers
-            # This method uses the provider's native API (e.g., OpenAI's beta.chat.completions.parse)
+            # Delegate to the model's structured_output method
+            # Each model implementation handles the specifics (native API, JSON schema, etc.)
             events = model.structured_output(output_type, messages, system_prompt)
             async for event in events:
                 if "output" in event and event["output"] is not None:
@@ -93,65 +96,6 @@ class NativeStrategy(StructuredOutputStrategy):
                 f"Native strategy failed: {e}", 
                 provider=provider_name, 
                 strategy="native"
-            ) from e
-
-
-class JsonSchemaStrategy(StructuredOutputStrategy):
-    """Strategy for providers with JSON schema support (Ollama, LlamaCpp)."""
-    
-    async def execute(
-        self,
-        model: Model,
-        output_type: Type[T],
-        messages: Messages,
-        system_prompt: Optional[str] = None
-    ) -> Optional[T]:
-        """Use JSON schema format parameter."""
-        provider_name = model.__class__.__name__
-        try:
-            # Validate that the model has the structured_output method
-            if not hasattr(model, 'structured_output'):
-                raise StructuredOutputError(
-                    f"Model {provider_name} does not support structured_output method",
-                    provider=provider_name,
-                    strategy="json_schema"
-                )
-            
-            # Validate that the output_type has model_json_schema method
-            if not hasattr(output_type, 'model_json_schema'):
-                raise StructuredOutputError(
-                    f"Output type {output_type.__name__} does not support model_json_schema method",
-                    provider=provider_name,
-                    strategy="json_schema"
-                )
-            
-            # Use the existing model.structured_output() method for JSON schema providers
-            # This method uses the format parameter with model_json_schema()
-            events = model.structured_output(output_type, messages, system_prompt)
-            async for event in events:
-                if "output" in event and event["output"] is not None:
-                    # Validate that the output is of the expected type
-                    output = event["output"]
-                    if isinstance(output, output_type):
-                        return output
-                    else:
-                        raise StructuredOutputValidationError(
-                            f"Output type mismatch: expected {output_type.__name__}, got {type(output).__name__}",
-                            provider=provider_name,
-                            strategy="json_schema"
-                        )
-            return None
-        except ValidationError as e:
-            raise StructuredOutputValidationError(
-                f"JSON schema strategy validation failed: {e}", 
-                provider=provider_name, 
-                strategy="json_schema"
-            ) from e
-        except Exception as e:
-            raise StructuredOutputError(
-                f"JSON schema strategy failed: {e}", 
-                provider=provider_name, 
-                strategy="json_schema"
             ) from e
 
 

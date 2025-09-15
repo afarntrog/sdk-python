@@ -3,7 +3,6 @@
 from .manager import StructuredOutputManager
 from .strategies import (
     NativeStrategy,
-    JsonSchemaStrategy,
     ToolCallingStrategy,
     PromptBasedStrategy,
     StructuredOutputStrategy,
@@ -14,7 +13,6 @@ __all__ = [
     "StructuredOutputManager",
     "StructuredOutputStrategy",
     "NativeStrategy",
-    "JsonSchemaStrategy", 
     "ToolCallingStrategy",
     "PromptBasedStrategy",
     "StructuredOutputError",
