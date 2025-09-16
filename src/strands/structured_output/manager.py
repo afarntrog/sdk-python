@@ -61,43 +61,17 @@ class StructuredOutputManager:
         """
         capabilities = []
         
-        # Check for native structured output support (includes JSON schema providers)
-        if self._has_native_support(model):
+        # Check model's declared capabilities
+        if getattr(model, 'supports_native_structured_output', False):
             capabilities.append('native')
             
-        # Check for tool calling support (Bedrock, Anthropic)
-        if self._has_tool_calling_support(model):
+        if getattr(model, 'supports_tool_calling_structured_output', False):
             capabilities.append('tool_calling')
             
         # Prompt-based always available as fallback
         capabilities.append('prompt_based')
         
         return capabilities
-    
-    def _has_native_support(self, model: Model) -> bool:
-        """Check if model has structured output support via model.structured_output() method."""
-        model_class_name = model.__class__.__name__
-        
-        # All providers that implement structured_output() method
-        native_providers = ['OpenAIModel', 'LiteLLMModel', 'OllamaModel', 'LlamaCppModel']
-        
-        return model_class_name in native_providers
-    
-    def _has_tool_calling_support(self, model: Model) -> bool:
-        """Check if model supports tool calling for structured output."""
-        model_class_name = model.__class__.__name__
-        
-        # Bedrock and Anthropic use tool calling mechanism
-        # Also check if model has stream method and existing structured_output method
-        tool_calling_providers = ['BedrockModel', 'AnthropicModel']
-        
-        has_provider_support = model_class_name in tool_calling_providers
-        has_required_methods = (
-            hasattr(model, 'stream') and 
-            hasattr(model, 'structured_output')
-        )
-        
-        return has_provider_support and has_required_methods
     
     async def execute_structured_output(
         self,

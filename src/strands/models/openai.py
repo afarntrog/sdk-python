@@ -38,6 +38,10 @@ class Client(Protocol):
 class OpenAIModel(Model):
     """OpenAI model provider implementation."""
 
+    # Capability flags
+    supports_native_structured_output = True
+    supports_tool_calling_structured_output = True
+
     client: Client
 
     class OpenAIConfig(TypedDict, total=False):

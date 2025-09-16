@@ -90,6 +90,10 @@ class LlamaCppModel(Model):
         >>> response = agent(image_content)
     """
 
+    # Capability flags
+    supports_native_structured_output = True
+    supports_tool_calling_structured_output = True
+
     class LlamaCppConfig(TypedDict, total=False):
         """Configuration options for llama.cpp models.
 

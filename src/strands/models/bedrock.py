@@ -63,6 +63,10 @@ class BedrockModel(Model):
     - Context window overflow detection
     """
 
+    # Capability flags
+    supports_native_structured_output = False
+    supports_tool_calling_structured_output = True
+
     class BedrockConfig(TypedDict, total=False):
         """Configuration options for Bedrock models.
 

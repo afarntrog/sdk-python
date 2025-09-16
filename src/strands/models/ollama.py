@@ -32,6 +32,10 @@ class OllamaModel(Model):
     - Tool/function calling
     """
 
+    # Capability flags
+    supports_native_structured_output = True
+    supports_tool_calling_structured_output = True
+
     class OllamaConfig(TypedDict, total=False):
         """Configuration parameters for Ollama models.
 

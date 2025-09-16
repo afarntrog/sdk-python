@@ -22,6 +22,10 @@ class Model(abc.ABC):
     standardized way to configure and process requests for different AI model providers.
     """
 
+    # Structured output capabilities - subclasses should override these
+    supports_native_structured_output: bool = False
+    supports_tool_calling_structured_output: bool = False
+
     @abc.abstractmethod
     # pragma: no cover
     def update_config(self, **model_config: Any) -> None:

@@ -30,6 +30,10 @@ T = TypeVar("T", bound=BaseModel)
 class AnthropicModel(Model):
     """Anthropic model provider implementation."""
 
+    # Capability flags
+    supports_native_structured_output = False
+    supports_tool_calling_structured_output = True
+
     EVENT_TYPES = {
         "message_start",
         "content_block_start",
