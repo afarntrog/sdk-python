@@ -1,30 +1,59 @@
-ValidationException                       Traceback (most recent call last)
-File /Volumes/workplace/dev/structured_output/v3/sdk-python/src/strands/event_loop/event_loop.py:269, in event_loop_cycle(agent, invocation_state, output_schema)
-    260 events = _handle_tool_execution(
-    261     stop_reason,
-    262     message,
-   (...)
-    267     invocation_state=invocation_state,
-    268 )
---> 269 async for typed_event in events:
-    270     yield typed_event
+print("📇 Contact Information Extraction")
+print("=" * 50)
 
-File /Volumes/workplace/dev/structured_output/v3/sdk-python/src/strands/event_loop/event_loop.py:416, in _handle_tool_execution(stop_reason, message, agent, cycle_trace, cycle_span, cycle_start_time, invocation_state)
-    415 events = recurse_event_loop(agent=agent, invocation_state=invocation_state)
---> 416 async for event in events:
-    417     yield event
+# agent = Agent(output_mode=ToolOutput())
+agent = Agent()
 
-File /Volumes/workplace/dev/structured_output/v3/sdk-python/src/strands/event_loop/event_loop.py:332, in recurse_event_loop(agent, invocation_state)
-    331 events = event_loop_cycle(agent=agent, invocation_state=invocation_state)
---> 332 async for event in events:
-    333     yield event
+# Sample unstructured text with contact information
+contact_text = """
+Hi there! My name is Sarah Johnson and I'm the Marketing Director at TechCorp Solutions.
+You can reach me at sarah.johnson@techcorp.com or call me at (555) 123-4567.
+Our office is located at 123 Business Ave, Suite 456, San Francisco, CA 94105.
+I'd love to discuss potential collaboration opportunities!
+"""
 
-File /Volumes/workplace/dev/structured_output/v3/sdk-python/src/strands/event_loop/event_loop.py:225, in event_loop_cycle(agent, invocation_state, output_schema)
-    224             else:
---> 225                 raise e
-...
-    299     logger.exception("cycle failed")
---> 300     raise EventLoopException(e, invocation_state["request_state"]) from e
-    302 yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"])
+print("📄 Input text:")
+print(contact_text.strip())
 
-EventLoopException: An error occurred (ValidationException) when calling the ConverseStream operation: The toolConfig field must be defined when using toolUse and toolResult content blocks.
+result = agent(
+    f"Extract contact information from this text: {contact_text}",
+    output_type=ContactInfo
+)
+
+contact = result.get_structured_output(ContactInfo)
+
+<ERROR>
+: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+  @validator('email')
+📇 Contact Information Extraction
+==================================================
+📄 Input text:
+Hi there! My name is Sarah Johnson and I'm the Marketing Director at TechCorp Solutions.
+You can reach me at sarah.johnson@techcorp.com or call me at (555) 123-4567.
+Our office is located at 123 Business Ave, Suite 456, San Francisco, CA 94105.
+I'd love to discuss potential collaboration opportunities!
+I'll extract the contact information from the text for you.
+Tool #1: ContactInfo
+tool_name=<ContactInfo>, available_tools=<[]> | tool not found in registry
+Failed to extract structured output from tool result: Response validation failed for ContactInfo: 1 validation error for ContactInfo
+name
+  Field required [type=missing, input_value={'text': 'Unknown tool: ContactInfo'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+I apologize for the error. Let me extract the contact information using the correct function:
+Tool #2: ContactInfo
+tool_name=<ContactInfo>, available_tools=<[]> | tool not found in registry
+Failed to extract structured output from tool result: Response validation failed for ContactInfo: 1 validation error for ContactInfo
+name
+  Field required [type=missing, input_value={'text': 'Unknown tool: ContactInfo'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+I see the issue - the function definition shows the name but it's not being recognized. Based on the text you provided, here's the extracted contact information:
+
+**Name:** Sarah Johnson  
+**Title:** Marketing Director  
+**Company:** TechCorp Solutions  
+**Email:** sarah.johnson@techcorp.com  
+**Phone:** (555) 123-4567  
+**Address:** 123 Business Ave, Suite 456, San Francisco, CA 94105
+
+The text contains complete contact information including personal details, professional information, and multiple ways to reach Sarah Johnson for potential collaboration opportunities.
+</ERROR>
