@@ -597,6 +597,8 @@ class Agent:
     async def stream_async(
         self,
         prompt: AgentInput = None,
+        output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]]]] = None,
+        output_mode: Optional["OutputMode"] = None,
         output_schema: Optional[OutputSchema] = None,
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
@@ -614,6 +616,9 @@ class Agent:
                 - list[ContentBlock]: Multi-modal content blocks
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
+            output_type: Pydantic model type(s) for structured output (overrides agent default).
+            output_mode: Output mode for structured output (overrides agent default).
+            output_schema: Pre-resolved output schema (takes precedence over output_type/output_mode).
             **kwargs: Additional parameters to pass to the event loop.
 
         Yields:
@@ -636,6 +641,10 @@ class Agent:
             ```
         """
         callback_handler = kwargs.get("callback_handler", self.callback_handler)
+
+        # Resolve output schema (runtime override or agent default)
+        if output_schema is None:
+            output_schema = self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
 
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)
@@ -660,7 +669,8 @@ class Agent:
                     stop_reason, message, metrics, state, structured_output = stop_data
                     result = AgentResult(stop_reason, message, metrics, state, structured_output)
                 else:  # Legacy format without structured_output
-                    result = AgentResult(*stop_data)
+                    stop_reason, message, metrics, state = stop_data
+                    result = AgentResult(stop_reason, message, metrics, state, None)
                     
                 callback_handler(result=result)
                 yield AgentResultEvent(result=result).as_dict()
