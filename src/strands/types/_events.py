@@ -351,3 +351,25 @@ class ForceStopEvent(TypedEvent):
 class AgentResultEvent(TypedEvent):
     def __init__(self, result: "AgentResult"):
         super().__init__({"result": result})
+
+
+class StructuredOutputEvent(TypedEvent):
+    """Event emitted when structured output is extracted from tool results.
+
+    This event is fired when a structured output tool is called and the result
+    is successfully extracted and validated.
+    """
+
+    def __init__(self, structured_output: Any, output_type: type):
+        """Initialize structured output event.
+
+        Args:
+            structured_output: The extracted and validated structured output instance
+            output_type: The expected output type (Pydantic model class)
+        """
+        super().__init__({"structured_output": structured_output, "output_type": output_type.__name__})
+
+    @property
+    def is_callback_event(self) -> bool:
+        """Structured output events should trigger callback handlers."""
+        return True

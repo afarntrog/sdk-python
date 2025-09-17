@@ -2,13 +2,16 @@
 
 import abc
 import logging
-from typing import Any, AsyncGenerator, AsyncIterable, Optional, Type, TypeVar, Union
+from typing import Any, AsyncGenerator, AsyncIterable, Optional, Type, TypeVar, Union, TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from ..types.content import Messages
 from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolSpec
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +63,31 @@ class Model(abc.ABC):
 
         Raises:
             ValidationException: The response format from the model does not match the output_model
+        """
+        pass
+
+    @abc.abstractmethod
+    # pragma: no cover
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+
+        Returns:
+            True if the model supports native structured output (e.g., OpenAI's structured outputs),
+            False if it only supports function calling or prompting approaches.
+        """
+        pass
+
+    @abc.abstractmethod
+    # pragma: no cover
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get model-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing model-specific structured output configuration.
+            This may include settings like strict mode, response format, etc.
         """
         pass
 

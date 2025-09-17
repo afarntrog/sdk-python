@@ -11,7 +11,7 @@ The event loop allows agents to:
 import asyncio
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncGenerator
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 
 from opentelemetry import trace as trace_api
 
@@ -33,6 +33,7 @@ from ..types._events import (
     ModelStopReason,
     StartEvent,
     StartEventLoopEvent,
+    StructuredOutputEvent,
     ToolResultMessageEvent,
     TypedEvent,
 )
@@ -50,6 +51,7 @@ from .streaming import stream_messages
 
 if TYPE_CHECKING:
     from ..agent import Agent
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,9 @@ INITIAL_DELAY = 4
 MAX_DELAY = 240  # 4 minutes
 
 
-async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> AsyncGenerator[TypedEvent, None]:
+async def event_loop_cycle(
+    agent: "Agent", invocation_state: dict[str, Any], output_schema: Optional["OutputSchema"] = None
+) -> AsyncGenerator[TypedEvent, None]:
     """Execute a single cycle of the event loop.
 
     This core function processes a single conversation turn, handling model inference, tool execution, and error
@@ -79,6 +83,9 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
             - request_state: State maintained across cycles
             - event_loop_cycle_id: Unique ID for this cycle
             - event_loop_cycle_span: Current tracing Span for this cycle
+        output_schema: Optional output schema for structured output processing.
+            When provided, the event loop will register structured output tools
+            and handle response processing.
 
     Yields:
         Model and tool stream events. The last event is a tuple containing:
@@ -138,7 +145,28 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
                 )
             )
 
-            tool_specs = agent.tool_registry.get_all_tool_specs()
+            # Register structured output tools if output schema is provided
+            structured_output_tools = []
+            structured_output_tool_names = set()
+            if output_schema:
+                from ..output import get_global_registry
+
+                registry = get_global_registry()
+                try:
+                    structured_output_tools = registry.get_tool_specs(output_schema)
+                    structured_output_tool_names = {tool.name for tool in structured_output_tools}
+                    logger.debug(f"Registered {len(structured_output_tools)} structured output tools: {structured_output_tool_names}")
+                except Exception as e:
+                    logger.error(f"Failed to generate structured output tools: {e}")
+                    # Continue without structured output tools rather than failing completely
+                    structured_output_tools = []
+
+            # Store structured output context in invocation state for later use
+            invocation_state["output_schema"] = output_schema
+            invocation_state["structured_output_tool_names"] = structured_output_tool_names
+
+            # Get all regular tools plus structured output tools
+            tool_specs = agent.tool_registry.get_all_tool_specs() + structured_output_tools
 
             try:
                 async for event in stream_messages(agent.model, agent.system_prompt, agent.messages, tool_specs):
@@ -351,6 +379,18 @@ async def _handle_tool_execution(
     async for tool_event in tool_events:
         yield tool_event
 
+    # Process structured output if any tools were structured output tools
+    structured_output_result = _extract_structured_output(
+        tool_uses, tool_results, invocation_state
+    )
+    if structured_output_result is not None:
+        structured_output, output_type = structured_output_result
+        invocation_state["request_state"]["structured_output"] = structured_output
+        logger.debug(f"Extracted structured output: {type(structured_output).__name__}")
+
+        # Emit structured output event for streaming
+        yield StructuredOutputEvent(structured_output, output_type)
+
     # Store parent cycle ID for the next cycle
     invocation_state["event_loop_parent_cycle_id"] = invocation_state["event_loop_cycle_id"]
 
@@ -375,3 +415,78 @@ async def _handle_tool_execution(
     events = recurse_event_loop(agent=agent, invocation_state=invocation_state)
     async for event in events:
         yield event
+
+
+def _extract_structured_output(
+    tool_uses: list[ToolUse],
+    tool_results: list[ToolResult],
+    invocation_state: dict[str, Any]
+) -> tuple[Any, type] | None:
+    """Extract structured output from tool results if any structured output tools were called.
+
+    Args:
+        tool_uses: List of tool use requests from the model
+        tool_results: List of tool execution results
+        invocation_state: Current invocation state containing structured output context
+
+    Returns:
+        Tuple of (parsed structured output instance, output type), or None if no structured output tools were called
+    """
+    output_schema = invocation_state.get("output_schema")
+    structured_output_tool_names = invocation_state.get("structured_output_tool_names", set())
+
+    if not output_schema or not structured_output_tool_names:
+        return None
+
+    # Find the first structured output tool that was called
+    structured_output_tool_use = None
+    structured_output_result = None
+
+    for tool_use in tool_uses:
+        tool_name = tool_use.get("name")
+        if tool_name in structured_output_tool_names:
+            # Find the corresponding result
+            tool_use_id = tool_use.get("toolUseId")
+            for result in tool_results:
+                if result.get("toolUseId") == tool_use_id:
+                    structured_output_tool_use = tool_use
+                    structured_output_result = result
+                    break
+            break
+
+    if not structured_output_tool_use or not structured_output_result:
+        return None
+
+    # Extract the structured output using the output mode
+    try:
+        # Get the expected type for this tool
+        tool_name = structured_output_tool_use.get("name")
+        expected_type = None
+
+        # Find the expected type by matching tool name to output types
+        for output_type in output_schema.types:
+            if output_type.__name__ == tool_name:
+                expected_type = output_type
+                break
+
+        if not expected_type:
+            logger.warning(f"Could not find expected type for structured output tool: {tool_name}")
+            return None
+
+        # Extract the result content
+        result_content = structured_output_result.get("content")
+        if isinstance(result_content, list) and len(result_content) > 0:
+            # Tool results are typically wrapped in a list
+            result_data = result_content[0]
+        else:
+            result_data = result_content
+
+        # Use the output mode to extract the structured result
+        structured_output = output_schema.mode.extract_result(result_data, expected_type)
+
+        logger.debug(f"Successfully extracted structured output of type {expected_type.__name__}")
+        return (structured_output, expected_type)
+
+    except Exception as e:
+        logger.error(f"Failed to extract structured output from tool result: {e}")
+        return None
