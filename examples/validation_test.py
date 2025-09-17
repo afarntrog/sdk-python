@@ -42,7 +42,7 @@ def test_system_components():
     
     # Test 3: Tool spec generation
     print("3. Testing tool spec generation...")
-    tool_specs = schema.mode.get_tool_specs(schema.types)
+    tool_specs = schema.mode.get_tool_specs(schema.type)
     print(f"   ✅ Generated {len(tool_specs)} tool specs")
     for spec in tool_specs:
         print(f"      - {spec['name']}: {spec['description']}")

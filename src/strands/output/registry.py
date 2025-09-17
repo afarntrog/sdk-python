@@ -16,7 +16,7 @@ class OutputRegistry:
 
     def resolve_output_schema(
         self,
-        output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]], OutputSchema]] = None,
+        output_type: Optional[Union[Type[BaseModel], OutputSchema]] = None,
         output_mode: Optional[OutputMode] = None,
     ) -> Optional[OutputSchema]:
         """Resolve output type and mode into OutputSchema.
@@ -63,9 +63,9 @@ class OutputRegistry:
 
     def _get_cache_key(self, schema: OutputSchema) -> str:
         """Generate cache key for schema."""
-        type_names = [t.__name__ for t in schema.types]
+        type_name = schema.type.__name__
         mode_name = schema.mode.__class__.__name__
-        return f"{mode_name}:{':'.join(sorted(type_names))}"
+        return f"{mode_name}:{type_name}"
 
 
 def validate_output_type(output_type: Type[BaseModel]) -> None:
@@ -90,5 +90,4 @@ def validate_output_schema(schema: OutputSchema) -> None:
     Raises:
         ValueError: If schema is invalid
     """
-    for output_type in schema.types:
-        validate_output_type(output_type)
+    validate_output_type(schema.type)

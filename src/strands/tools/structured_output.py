@@ -302,29 +302,7 @@ def convert_pydantic_to_tool_spec(
     )
 
 
-def convert_multiple_pydantic_to_tool_specs(
-    models: list[Type[BaseModel]],
-    description: Optional[str] = None,
-) -> list[ToolSpec]:
-    """Convert multiple Pydantic models to tool specifications.
-    
-    Args:
-        models: List of Pydantic model classes to convert
-        description: Optional description prefix for the tools
-        
-    Returns:
-        List of ToolSpec objects, one for each model
-    """
-    tool_specs = []
-    for model in models:
-        model_description = description
-        if description:
-            model_description = f"{description} - {model.__name__}"
-        
-        tool_spec = convert_pydantic_to_tool_spec(model, model_description)
-        tool_specs.append(tool_spec)
-    
-    return tool_specs
+
 
 
 def get_enhanced_tool_description(model: Type[BaseModel], base_description: Optional[str] = None) -> str:

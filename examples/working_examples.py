@@ -411,7 +411,7 @@ def working_example_8():
     print(f"   Mode: {type(schema.mode).__name__}")
     
     # Generate tool specs
-    tool_specs = schema.mode.get_tool_specs(schema.types)
+    tool_specs = schema.mode.get_tool_specs(schema.type)
     print(f"✅ Generated {len(tool_specs)} tool specs:")
     for spec in tool_specs:
         print(f"   - {spec['name']}: {spec['description']}")

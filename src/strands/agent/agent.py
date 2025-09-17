@@ -216,7 +216,7 @@ class Agent:
         messages: Optional[Messages] = None,
         tools: Optional[list[Union[str, dict[str, str], Any]]] = None,
         system_prompt: Optional[str] = None,
-        output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]]]] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional["OutputMode"] = None,
         callback_handler: Optional[
             Union[Callable[..., Any], _DefaultCallbackHandlerSentinel]
@@ -369,7 +369,7 @@ class Agent:
 
     def _resolve_output_schema(
         self,
-        output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]]]] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional["OutputMode"] = None,
     ) -> Optional[OutputSchema]:
         """Resolve output type and mode into OutputSchema with model support validation.
@@ -433,7 +433,7 @@ class Agent:
     def __call__(
         self, 
         prompt: AgentInput = None, 
-        output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]]]] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional["OutputMode"] = None,
         **kwargs: Any
     ) -> AgentResult:
@@ -464,9 +464,6 @@ class Agent:
                 - state: The final state of the event loop
                 - structured_output: Parsed structured output when output_type was specified
         """
-        # Resolve output schema (runtime override or agent default)
-        output_schema = self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
-
         def execute() -> AgentResult:
             return asyncio.run(self.invoke_async(prompt, output_type, output_mode, **kwargs))
 
@@ -474,7 +471,7 @@ class Agent:
             future = executor.submit(execute)
             return future.result()
 
-    async def invoke_async(self, prompt: AgentInput = None, output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]]]] = None, output_mode: Optional["OutputMode"] = None, **kwargs: Any) -> AgentResult:
+    async def invoke_async(self, prompt: AgentInput = None, output_type: Optional[Type[BaseModel]] = None, output_mode: Optional["OutputMode"] = None, **kwargs: Any) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
 
         This method implements the conversational interface with multiple input patterns:
@@ -597,7 +594,7 @@ class Agent:
     async def stream_async(
         self,
         prompt: AgentInput = None,
-        output_type: Optional[Union[Type[BaseModel], list[Type[BaseModel]]]] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional["OutputMode"] = None,
         output_schema: Optional[OutputSchema] = None,
         **kwargs: Any,

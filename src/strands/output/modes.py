@@ -17,10 +17,10 @@ class ToolOutput(OutputMode):
     consistent behavior regardless of model capabilities.
     """
 
-    def get_tool_specs(self, output_types: list[Type[BaseModel]]) -> list["ToolSpec"]:
-        """Convert Pydantic models to tool specifications."""
+    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
+        """Convert Pydantic model to tool specifications."""
         from strands.tools.structured_output import convert_pydantic_to_tool_spec
-        return [convert_pydantic_to_tool_spec(model) for model in output_types]
+        return [convert_pydantic_to_tool_spec(output_type)]
 
     def extract_result(self, model_response: Any) -> Any:
         """Extract result from tool call response."""
@@ -39,7 +39,7 @@ class NativeOutput(OutputMode):
     Falls back to ToolOutput if not supported.
     """
 
-    def get_tool_specs(self, output_types: list[Type[BaseModel]]) -> list["ToolSpec"]:
+    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will use native JSON schema instead."""
         return []
 
@@ -68,7 +68,7 @@ class PromptedOutput(OutputMode):
         """
         self.template = template or "Please respond with JSON matching this schema: {schema}"
 
-    def get_tool_specs(self, output_types: list[Type[BaseModel]]) -> list["ToolSpec"]:
+    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will inject schema into system prompt instead."""
         return []
 

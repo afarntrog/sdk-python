@@ -42,7 +42,7 @@ def test_output_schema():
     print(f"   Mode: {type(schema.mode).__name__}")
     
     # Test tool spec generation
-    tool_specs = schema.mode.get_tool_specs(schema.types)
+    tool_specs = schema.mode.get_tool_specs(schema.type)
     print(f"✅ Generated {len(tool_specs)} tool specs")
     
     for spec in tool_specs:

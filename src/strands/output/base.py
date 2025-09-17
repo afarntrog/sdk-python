@@ -13,14 +13,14 @@ class OutputMode(ABC):
     """Base class for different structured output modes."""
 
     @abstractmethod
-    def get_tool_specs(self, output_types: list[Type[BaseModel]]) -> list["ToolSpec"]:
-        """Convert output types to tool specifications.
+    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
+        """Convert output type to tool specifications.
         
         Args:
-            output_types: List of Pydantic model types to convert
+            output_type: Pydantic model type to convert
             
         Returns:
-            List of tool specifications for the output types
+            List of tool specifications for the output type
         """
         pass
 
@@ -54,7 +54,7 @@ class OutputSchema:
 
     def __init__(
         self,
-        types: Union[Type[BaseModel], list[Type[BaseModel]]],
+        type: Type[BaseModel],
         mode: Optional[OutputMode] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -62,27 +62,15 @@ class OutputSchema:
         """Initialize output schema.
         
         Args:
-            types: Pydantic model type(s) for structured output
+            type: Pydantic model type for structured output
             mode: Output mode to use (defaults to ToolOutput)
             name: Optional name for the output schema
             description: Optional description of the output schema
         """
-        self.types = types if isinstance(types, list) else [types]
+        self.type = type
         if mode is None:
             from .modes import ToolOutput
             mode = ToolOutput()
         self.mode = mode
         self.name = name
         self.description = description
-
-    @property
-    def single_type(self) -> Type[BaseModel]:
-        """Get single output type (for schemas with only one type)."""
-        if len(self.types) != 1:
-            raise ValueError(f"Expected single output type, got {len(self.types)}")
-        return self.types[0]
-
-    @property
-    def is_single_type(self) -> bool:
-        """Check if schema has exactly one output type."""
-        return len(self.types) == 1

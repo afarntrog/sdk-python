@@ -10,6 +10,7 @@ The event loop allows agents to:
 
 import asyncio
 import logging
+import time
 import uuid
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 
@@ -151,7 +152,8 @@ async def event_loop_cycle(
             
             # Add structured output tools if output_schema is specified
             if output_schema:
-                structured_output_tools = output_schema.mode.get_tool_specs(output_schema.types)
+                structured_output_tools = output_schema.mode.get_tool_specs(output_schema.type)
+                # TODO inspect this with regular tools as well to see if we have all the tools?
                 tool_specs.extend(structured_output_tools)
 
             try:
@@ -321,6 +323,100 @@ async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -
     recursive_trace.end()
 
 
+async def _handle_structured_output_execution(
+    tool_uses: list[ToolUse],
+    output_schema: "OutputSchema",
+    stop_reason: StopReason,
+    message: Message,
+    agent: "Agent",
+    cycle_trace: Trace,
+    cycle_span: Any,
+    cycle_start_time: float,
+    invocation_state: dict[str, Any],
+) -> AsyncGenerator[TypedEvent, None]:
+    """Handle structured output tool execution.
+    
+    This function processes tool uses that match structured output schemas,
+    creating appropriate tool results and managing tracing/metrics.
+    
+    Args:
+        tool_uses: List of tool use requests from the model
+        output_schema: Output schema defining expected structured output
+        stop_reason: The reason the model stopped generating
+        message: The message from the model
+        agent: Agent for which tools are being executed
+        cycle_trace: Trace object for the current event loop cycle
+        cycle_span: Span object for tracing the cycle
+        cycle_start_time: Start time of the current cycle
+        invocation_state: State maintained across cycles
+        
+    Yields:
+        Events related to structured output execution
+    """
+    structured_output_result = _extract_structured_output(tool_uses, output_schema)
+    if structured_output_result is None:
+        return
+        
+    # Get expected tool names for structured output
+    expected_tool_names = {output_schema.type.__name__}
+    
+    # Create tool results and traces for structured output tools
+    structured_output_tool_results = []
+    for tool_use in tool_uses:
+        tool_name = tool_use.get("name", "")
+        
+        if tool_name in expected_tool_names:
+            # Create a tool result for this structured output tool
+            tool_result: ToolResult = {
+                "toolUseId": tool_use["toolUseId"],
+                "content": [{"text": f"Successfully extracted {tool_name} data"}],
+                "status": "success"
+            }
+            structured_output_tool_results.append(tool_result)
+            
+            # Create trace and metrics using existing infrastructure pattern
+            tracer = get_tracer()
+            tool_call_span = tracer.start_tool_call_span(tool_use, cycle_span)
+            tool_trace = Trace(f"Tool: {tool_name}", parent_id=cycle_trace.id, raw_name=tool_name)
+            tool_start_time = time.time()
+            
+            # Simulate successful tool execution
+            tool_success = True
+            tool_duration = time.time() - tool_start_time
+            result_message = Message(role="user", content=[{"toolResult": tool_result}])
+            agent.event_loop_metrics.add_tool_usage(tool_use, tool_duration, tool_trace, tool_success, result_message)
+            cycle_trace.add_child(tool_trace)
+            
+            tracer.end_tool_call_span(tool_call_span, tool_result)
+    
+    # Emit structured output event
+    yield StructuredOutputEvent(structured_output_result)
+    
+    # Add tool result message to conversation history to maintain proper flow
+    if structured_output_tool_results:
+        tool_result_message: Message = {
+            "role": "user",
+            "content": [{"toolResult": result} for result in structured_output_tool_results],
+        }
+        agent.messages.append(tool_result_message)
+        agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
+        yield ToolResultMessageEvent(message=tool_result_message)
+    
+    # End the event loop with the structured output result
+    agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace, {})
+    if cycle_span:
+        tracer = get_tracer()
+        tracer.end_event_loop_cycle_span(span=cycle_span, message=message)
+    
+    yield EventLoopStopEvent(
+        stop_reason, 
+        message, 
+        agent.event_loop_metrics, 
+        invocation_state["request_state"],
+        structured_output=structured_output_result
+    )
+
+
 async def _handle_tool_execution(
     stop_reason: StopReason,
     message: Message,
@@ -361,74 +457,15 @@ async def _handle_tool_execution(
 
     # Check for structured output tool calls
     output_schema = invocation_state.get("output_schema")
-    structured_output_result = None
-    
     if output_schema:
         structured_output_result = _extract_structured_output(tool_uses, output_schema)
         if structured_output_result is not None:
-            # Get expected tool names for structured output
-            expected_tool_names = set()
-            for output_type in output_schema.types:
-                expected_tool_names.add(output_type.__name__)
-            
-            # Create tool results and traces for structured output tools using existing infrastructure
-            structured_output_tool_results = []
-            for tool_use in tool_uses:
-                tool_name = tool_use.get("name", "")
-                
-                if tool_name in expected_tool_names:
-                    # Create a tool result for this structured output tool
-                    tool_result: ToolResult = {
-                        "toolUseId": tool_use["toolUseId"],
-                        "content": [{"text": f"Successfully extracted {tool_name} data"}],
-                        "status": "success"
-                    }
-                    structured_output_tool_results.append(tool_result)
-                    
-                    # Create trace and metrics using the same pattern as ToolExecutor._stream_with_trace
-                    # This ensures consistency with regular tool execution tracing
-                    import time
-                    
-                    tracer = get_tracer()
-                    tool_call_span = tracer.start_tool_call_span(tool_use, cycle_span)
-                    tool_trace = Trace(f"Tool: {tool_name}", parent_id=cycle_trace.id, raw_name=tool_name)
-                    tool_start_time = time.time()
-                    
-                    # Simulate successful tool execution
-                    tool_success = True
-                    tool_duration = time.time() - tool_start_time
-                    message = Message(role="user", content=[{"toolResult": tool_result}])
-                    agent.event_loop_metrics.add_tool_usage(tool_use, tool_duration, tool_trace, tool_success, message)
-                    cycle_trace.add_child(tool_trace)
-                    
-                    tracer.end_tool_call_span(tool_call_span, tool_result)
-            
-            # Emit structured output event
-            yield StructuredOutputEvent(structured_output_result)
-            
-            # Add tool result message to conversation history to maintain proper flow
-            if structured_output_tool_results:
-                tool_result_message: Message = {
-                    "role": "user",
-                    "content": [{"toolResult": result} for result in structured_output_tool_results],
-                }
-                agent.messages.append(tool_result_message)
-                agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
-                yield ToolResultMessageEvent(message=tool_result_message)
-            
-            # We found structured output, end the event loop with the result
-            agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace, {})
-            if cycle_span:
-                tracer = get_tracer()
-                tracer.end_event_loop_cycle_span(span=cycle_span, message=message)
-            
-            yield EventLoopStopEvent(
-                stop_reason, 
-                message, 
-                agent.event_loop_metrics, 
-                invocation_state["request_state"],
-                structured_output=structured_output_result
-            )
+            # Delegate to structured output handling
+            async for event in _handle_structured_output_execution(
+                tool_uses, output_schema, stop_reason, message, agent,
+                cycle_trace, cycle_span, cycle_start_time, invocation_state
+            ):
+                yield event
             return
 
     tool_events = agent.tool_executor._execute(
@@ -450,7 +487,6 @@ async def _handle_tool_execution(
     yield ToolResultMessageEvent(message=tool_result_message)
 
     if cycle_span:
-        # TODO here is the error
         tracer = get_tracer()
         tracer.end_event_loop_cycle_span(span=cycle_span, message=message, tool_result_message=tool_result_message)
 
@@ -476,9 +512,8 @@ def _extract_structured_output(tool_uses: list[ToolUse], output_schema: "OutputS
     """
     # Get the expected tool names for structured output
     expected_tool_names = set()
-    for output_type in output_schema.types:
-        # Tool names are the exact class name as generated by convert_pydantic_to_tool_spec
-        expected_tool_names.add(output_type.__name__)
+    # Tool names are the exact class name as generated by convert_pydantic_to_tool_spec
+    expected_tool_names.add(output_schema.type.__name__)
     
     # Look for matching tool calls
     for tool_use in tool_uses:
@@ -488,13 +523,12 @@ def _extract_structured_output(tool_uses: list[ToolUse], output_schema: "OutputS
             tool_input = tool_use.get("input", {})
             
             # Find the matching output type
-            for output_type in output_schema.types:
-                if tool_name == output_type.__name__:
-                    try:
-                        # Create instance from tool input
-                        return output_type(**tool_input)
-                    except Exception as e:
-                        logger.warning(f"Failed to create {output_type.__name__} from tool input: {e}")
-                        continue
+            if tool_name == output_schema.type.__name__:
+                try:
+                    # Create instance from tool input
+                    return output_schema.type(**tool_input)
+                except Exception as e:
+                    logger.warning(f"Failed to create {output_schema.type.__name__} from tool input: {e}")
+                    continue
     
     return None
