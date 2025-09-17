@@ -302,6 +302,53 @@ def convert_pydantic_to_tool_spec(
     )
 
 
+def convert_multiple_pydantic_to_tool_specs(
+    models: list[Type[BaseModel]],
+    description: Optional[str] = None,
+) -> list[ToolSpec]:
+    """Convert multiple Pydantic models to tool specifications.
+    
+    Args:
+        models: List of Pydantic model classes to convert
+        description: Optional description prefix for the tools
+        
+    Returns:
+        List of ToolSpec objects, one for each model
+    """
+    tool_specs = []
+    for model in models:
+        model_description = description
+        if description:
+            model_description = f"{description} - {model.__name__}"
+        
+        tool_spec = convert_pydantic_to_tool_spec(model, model_description)
+        tool_specs.append(tool_spec)
+    
+    return tool_specs
+
+
+def get_enhanced_tool_description(model: Type[BaseModel], base_description: Optional[str] = None) -> str:
+    """Get enhanced description for a tool based on the model.
+    
+    Args:
+        model: The Pydantic model class
+        base_description: Optional base description to enhance
+        
+    Returns:
+        Enhanced description string
+    """
+    model_doc = model.__doc__.strip() if model.__doc__ else ""
+    
+    if base_description and model_doc:
+        return f"{base_description}. {model_doc}"
+    elif model_doc:
+        return model_doc
+    elif base_description:
+        return base_description
+    else:
+        return f"Structured output tool for {model.__name__}"
+
+
 def _expand_nested_properties(schema: Dict[str, Any], model: Type[BaseModel]) -> None:
     """Expand the properties of nested models in the schema to include their full structure.
 

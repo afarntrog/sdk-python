@@ -455,3 +455,13 @@ class WriterModel(Model):
             yield {"output": output_model.model_validate_json(content)}
         except Exception as e:
             raise ValueError(f"Failed to parse or load content into model: {e}") from e
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Writer does not support native structured output."""
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Writer uses function calling for structured output."""
+        return {}

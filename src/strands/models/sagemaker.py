@@ -612,3 +612,13 @@ class SageMakerAIModel(OpenAIModel):
         ) as e:
             logger.error("SageMaker structured output error: %s", str(e))
             raise ValueError(f"SageMaker structured output error: {str(e)}") from e
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """SageMaker does not support native structured output."""
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """SageMaker uses function calling for structured output."""
+        return {}

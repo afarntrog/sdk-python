@@ -2,11 +2,21 @@ import unittest.mock
 from typing import cast
 
 import pytest
+from pydantic import BaseModel
 
 from strands.agent.agent_result import AgentResult
 from strands.telemetry.metrics import EventLoopMetrics
 from strands.types.content import Message
 from strands.types.streaming import StopReason
+
+
+class UserModel(BaseModel):
+    name: str
+    age: int
+
+
+class DocumentModel(BaseModel):
+    title: str
 
 
 @pytest.fixture
@@ -48,6 +58,68 @@ def test__init__(mock_metrics, simple_message: Message):
     assert result.message == simple_message
     assert result.metrics == mock_metrics
     assert result.state == state
+    assert result.structured_output is None
+
+
+def test__init__with_structured_output(mock_metrics, simple_message: Message):
+    """Test that AgentResult can be initialized with structured output."""
+    test_output = UserModel(name="John", age=30)
+    
+    result = AgentResult(
+        stop_reason="end_turn", 
+        message=simple_message, 
+        metrics=mock_metrics, 
+        state={},
+        structured_output=test_output
+    )
+
+    assert result.structured_output == test_output
+
+
+def test_get_structured_output_success(mock_metrics, simple_message: Message):
+    """Test successful retrieval of structured output with correct type."""
+    test_output = UserModel(name="John", age=30)
+    
+    result = AgentResult(
+        stop_reason="end_turn", 
+        message=simple_message, 
+        metrics=mock_metrics, 
+        state={},
+        structured_output=test_output
+    )
+
+    retrieved = result.get_structured_output(UserModel)
+    assert retrieved == test_output
+    assert isinstance(retrieved, UserModel)
+
+
+def test_get_structured_output_no_output(mock_metrics, simple_message: Message):
+    """Test error when no structured output is available."""
+    result = AgentResult(
+        stop_reason="end_turn", 
+        message=simple_message, 
+        metrics=mock_metrics, 
+        state={}
+    )
+
+    with pytest.raises(ValueError, match="No structured output available"):
+        result.get_structured_output(UserModel)
+
+
+def test_get_structured_output_type_mismatch(mock_metrics, simple_message: Message):
+    """Test error when structured output type doesn't match expected type."""
+    test_output = UserModel(name="John", age=30)
+    
+    result = AgentResult(
+        stop_reason="end_turn", 
+        message=simple_message, 
+        metrics=mock_metrics, 
+        state={},
+        structured_output=test_output
+    )
+
+    with pytest.raises(ValueError, match="Structured output type mismatch"):
+        result.get_structured_output(DocumentModel)
 
 
 def test__str__simple(mock_metrics, simple_message: Message):
@@ -95,3 +167,19 @@ def test__str__non_dict_content(mock_metrics):
 
     message_string = str(result)
     assert message_string == "Valid text\nMore valid text\n"
+
+
+def test__str__with_structured_output(mock_metrics, simple_message: Message):
+    """Test that str() works normally even when structured output is present."""
+    test_output = UserModel(name="John", age=30)
+    
+    result = AgentResult(
+        stop_reason="end_turn", 
+        message=simple_message, 
+        metrics=mock_metrics, 
+        state={},
+        structured_output=test_output
+    )
+
+    message_string = str(result)
+    assert message_string == "Hello world!\n"

@@ -461,3 +461,13 @@ class AnthropicModel(Model):
             raise ValueError("No valid tool use or tool use input was found in the Anthropic response.")
 
         yield {"output": output_model(**output_response)}
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Anthropic does not support native structured output."""
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Anthropic uses function calling for structured output."""
+        return {}

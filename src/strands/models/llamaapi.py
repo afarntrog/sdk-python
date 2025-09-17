@@ -444,3 +444,11 @@ class LlamaAPIModel(Model):
         #     response_format=response_format,
         # )
         raise NotImplementedError("Strands sdk-python does not implement this in the Llama API Preview.")
+
+    def supports_native_structured_output(self) -> bool:
+        """LlamaAPI does not support native structured output."""
+        return False
+
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """LlamaAPI uses function calling for structured output."""
+        return {}

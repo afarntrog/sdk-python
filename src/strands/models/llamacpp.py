@@ -762,3 +762,16 @@ class LlamaCppModel(Model):
         finally:
             # Restore original configuration
             self.config["params"] = original_params
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """LlamaCpp supports structured output via JSON schema."""
+        return True
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """LlamaCpp uses JSON schema for structured output."""
+        if output_schema.is_single_type:
+            return {"response_format": {"type": "json_object", "schema": output_schema.single_type.model_json_schema()}}
+        else:
+            return {}

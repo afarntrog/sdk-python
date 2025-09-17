@@ -818,3 +818,13 @@ class BedrockModel(Model):
             )
 
         return _DEFAULT_BEDROCK_MODEL_ID.format(prefix_inference_map.get(prefix, prefix))
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Bedrock does not support native structured output."""
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Bedrock uses function calling for structured output."""
+        return {}

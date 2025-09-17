@@ -363,3 +363,16 @@ class OllamaModel(Model):
             yield {"output": output_model.model_validate_json(content)}
         except Exception as e:
             raise ValueError(f"Failed to parse or load content into model: {e}") from e
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Ollama supports structured output via format parameter."""
+        return True
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Ollama uses JSON schema format for structured output."""
+        if output_schema.is_single_type:
+            return {"format": output_schema.single_type.model_json_schema()}
+        else:
+            return {}
