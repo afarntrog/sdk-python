@@ -328,7 +328,9 @@ async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -
 
     yield StartEvent()
 
-    events = event_loop_cycle(agent=agent, invocation_state=invocation_state)
+    # Retrieve the output_schema from invocation_state to preserve it in recursive calls
+    output_schema = invocation_state.get("output_schema")
+    events = event_loop_cycle(agent=agent, invocation_state=invocation_state, output_schema=output_schema)
     async for event in events:
         yield event
 
