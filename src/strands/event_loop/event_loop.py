@@ -148,16 +148,27 @@ async def event_loop_cycle(
                 )
             )
 
-            tool_specs = agent.tool_registry.get_all_tool_specs()
-            
-            # Add structured output tools if output_schema is specified
-            if output_schema:
-                structured_output_tools = output_schema.mode.get_tool_specs(output_schema.type)
-                # TODO inspect this with regular tools as well to see if we have all the tools?
-                tool_specs.extend(structured_output_tools)
+            # Handle tool specifications based on invocation state
+            if invocation_state.get("structured_output_only", False):
+                # Only use structured output tools when forcing invocation
+                if output_schema:
+                    tool_specs = output_schema.mode.get_tool_specs(output_schema.type)
+                else:
+                    tool_specs = []
+            else:
+                # Normal operation: use all available tools
+                tool_specs = agent.tool_registry.get_all_tool_specs()
+                
+                # Add structured output tools if output_schema is specified
+                if output_schema:
+                    structured_output_tools = output_schema.mode.get_tool_specs(output_schema.type)
+                    tool_specs.extend(structured_output_tools)
+
+            # Get tool_choice parameter if specified
+            tool_choice = invocation_state.get("tool_choice")
 
             try:
-                async for event in stream_messages(agent.model, agent.system_prompt, agent.messages, tool_specs):
+                async for event in stream_messages(agent.model, agent.system_prompt, agent.messages, tool_specs, tool_choice):
                     if not isinstance(event, ModelStopReason):
                         yield event
 
@@ -242,7 +253,8 @@ async def event_loop_cycle(
                 )
             )
 
-        # If the model is requesting to use tools
+        # If the model is requesting to use tools TODO over here we EXIT the loop if the stop_reason is tool_use so we never get to check if the structured output wasn't called
+        # stop_reason = 'TEST_TODO_AFARN'
         if stop_reason == "tool_use":
             # Handle tool execution
             events = _handle_tool_execution(
@@ -286,6 +298,33 @@ async def event_loop_cycle(
         yield ForceStopEvent(reason=e)
         logger.exception("cycle failed")
         raise EventLoopException(e, invocation_state["request_state"]) from e
+
+    # Force structured output tool call if LLM didn't use it automatically
+    print(100*"7777")
+    if output_schema and stop_reason != "tool_use":
+        logger.debug("LLM didn't call structured output tool, forcing invocation via recursive event loop")
+        
+        # Add forcing message to conversation
+        # TODO I don't think we need this. I think we can just pass in the data with the tool with toolChoice
+        # force_message: Message = {
+        #     "role": "user", 
+        #     "content": [{"text": f"Use the {output_schema.type.__name__} tool."}]
+        # }
+        # agent.messages.append(force_message)
+        # agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=force_message))
+
+        # TODO testing only; remove the tool_use message (this can never happen in prod because we check in the begining if)
+        
+        # Create new invocation state for forced call with tool choice
+        forced_invocation_state = invocation_state.copy()
+        forced_invocation_state["tool_choice"] = {"tool": {"name": output_schema.type.__name__}}
+        forced_invocation_state["structured_output_only"] = True
+        
+        # Recursively call event loop with constraints
+        events = recurse_event_loop(agent=agent, invocation_state=forced_invocation_state)
+        async for typed_event in events:
+            yield typed_event
+        return
 
     yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
 
