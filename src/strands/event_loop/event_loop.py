@@ -154,7 +154,7 @@ async def event_loop_cycle(
                 registry = get_global_registry()
                 try:
                     structured_output_tools = registry.get_tool_specs(output_schema)
-                    structured_output_tool_names = {tool.name for tool in structured_output_tools}
+                    structured_output_tool_names = {tool.get('name') for tool in structured_output_tools}
                     logger.debug(f"Registered {len(structured_output_tools)} structured output tools: {structured_output_tool_names}")
                 except Exception as e:
                     logger.error(f"Failed to generate structured output tools: {e}")
