@@ -7,7 +7,7 @@ import base64
 import json
 import logging
 import mimetypes
-from typing import Any, AsyncGenerator, Dict, List, Optional, Type, TypedDict, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Type, TypedDict, TypeVar, Union, cast
 
 import writerai
 from pydantic import BaseModel
@@ -19,6 +19,9 @@ from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolResult, ToolSpec, ToolUse
 from ._validation import validate_config_keys, warn_on_tool_choice_not_supported
 from .model import Model
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +83,36 @@ class WriterModel(Model):
             The Writer model configuration.
         """
         return self.config
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this Writer model supports native structured output capabilities.
+
+        Returns:
+            False since Writer doesn't support native structured output,
+            only function calling.
+        """
+        # Writer doesn't have structured output support like OpenAI
+        # It only supports function calling for structured output
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get Writer-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing Writer-specific structured output configuration.
+        """
+        # Writer uses function calling for structured output
+        # No special configuration needed beyond tool specs
+        config = {
+            "response_format": "function_calling",
+        }
+
+        return config
 
     def _format_request_message_contents_vision(self, contents: list[ContentBlock]) -> list[dict[str, Any]]:
         def _format_content_vision(content: ContentBlock) -> dict[str, Any]:

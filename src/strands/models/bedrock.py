@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import warnings
-from typing import Any, AsyncGenerator, Callable, Iterable, Literal, Optional, Type, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Iterable, Literal, Optional, Type, TypeVar, Union, cast
 
 import boto3
 from botocore.config import Config as BotocoreConfig
@@ -27,6 +27,9 @@ from ..types.streaming import CitationsDelta, StreamEvent
 from ..types.tools import ToolChoice, ToolResult, ToolSpec
 from ._validation import validate_config_keys
 from .model import Model
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +187,37 @@ class BedrockModel(Model):
             The Bedrock model configuration.
         """
         return self.config
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this Bedrock model supports native structured output capabilities.
+
+        Returns:
+            False since Bedrock doesn't support native structured output,
+            only function calling.
+        """
+        # Bedrock doesn't have a direct equivalent to OpenAI's structured outputs
+        # It only supports function calling for structured output
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get Bedrock-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing Bedrock-specific structured output configuration.
+        """
+        # Bedrock uses function calling for structured output
+        # No special configuration needed beyond tool specs
+        config = {
+            "response_format": "function_calling",
+            "tool_choice": "any",  # Force tool use for structured output
+        }
+
+        return config
 
     def _should_include_tool_result_status(self) -> bool:
         """Determine whether to include tool result status based on current config."""

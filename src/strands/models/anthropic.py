@@ -7,7 +7,7 @@ import base64
 import json
 import logging
 import mimetypes
-from typing import Any, AsyncGenerator, Optional, Type, TypedDict, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Type, TypedDict, TypeVar, Union, cast
 
 import anthropic
 from pydantic import BaseModel
@@ -21,6 +21,9 @@ from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolChoiceToolDict, ToolSpec
 from ._validation import validate_config_keys
 from .model import Model
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +97,37 @@ class AnthropicModel(Model):
             The Anthropic model configuration.
         """
         return self.config
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this Anthropic model supports native structured output capabilities.
+
+        Returns:
+            False since Anthropic doesn't support native structured output,
+            only function calling.
+        """
+        # Anthropic doesn't have a direct equivalent to OpenAI's structured outputs
+        # It only supports function calling for structured output
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get Anthropic-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing Anthropic-specific structured output configuration.
+        """
+        # Anthropic uses function calling for structured output
+        # No special configuration needed beyond tool specs
+        config = {
+            "response_format": "function_calling",
+            "tool_choice": "any",  # Force tool use for structured output
+        }
+
+        return config
 
     def _format_request_message_content(self, content: ContentBlock) -> dict[str, Any]:
         """Format an Anthropic content block.

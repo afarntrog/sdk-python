@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Literal, Optional, Type, TypedDict, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Literal, Optional, Type, TypedDict, TypeVar, Union, cast
 
 import boto3
 from botocore.config import Config as BotocoreConfig
@@ -17,6 +17,9 @@ from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolResult, ToolSpec
 from ._validation import validate_config_keys, warn_on_tool_choice_not_supported
 from .openai import OpenAIModel
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -194,6 +197,36 @@ class SageMakerAIModel(OpenAIModel):
             The Amazon SageMaker model configuration.
         """
         return cast(SageMakerAIModel.SageMakerAIEndpointConfig, self.endpoint_config)
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this SageMaker model supports native structured output capabilities.
+
+        Returns:
+            False since SageMaker doesn't support native structured output,
+            only function calling.
+        """
+        # SageMaker doesn't have structured output support like OpenAI
+        # It only supports function calling for structured output
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get SageMaker-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing SageMaker-specific structured output configuration.
+        """
+        # SageMaker uses function calling for structured output
+        # No special configuration needed beyond tool specs
+        config = {
+            "response_format": "function_calling",
+        }
+
+        return config
 
     @override
     def format_request(

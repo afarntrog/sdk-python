@@ -15,6 +15,7 @@ import logging
 import mimetypes
 import time
 from typing import (
+    TYPE_CHECKING,
     Any,
     AsyncGenerator,
     Dict,
@@ -36,6 +37,9 @@ from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolSpec
 from ._validation import validate_config_keys, warn_on_tool_choice_not_supported
 from .model import Model
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +199,36 @@ class LlamaCppModel(Model):
             The llama.cpp model configuration.
         """
         return self.config  # type: ignore[return-value]
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this llama.cpp model supports native structured output capabilities.
+
+        Returns:
+            False since llama.cpp doesn't support native structured output,
+            only function calling.
+        """
+        # llama.cpp doesn't have structured output support like OpenAI
+        # It only supports function calling for structured output
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get llama.cpp-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing llama.cpp-specific structured output configuration.
+        """
+        # llama.cpp uses function calling for structured output
+        # No special configuration needed beyond tool specs
+        config = {
+            "response_format": "function_calling",
+        }
+
+        return config
 
     def _format_message_content(self, content: Union[ContentBlock, Dict[str, Any]]) -> dict[str, Any]:
         """Format a content block for llama.cpp.

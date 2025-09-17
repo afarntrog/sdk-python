@@ -8,7 +8,7 @@ import base64
 import json
 import logging
 import mimetypes
-from typing import Any, AsyncGenerator, Optional, Type, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Type, TypeVar, Union, cast
 
 import llama_api_client
 from llama_api_client import LlamaAPIClient
@@ -21,6 +21,9 @@ from ..types.streaming import StreamEvent, Usage
 from ..types.tools import ToolChoice, ToolResult, ToolSpec, ToolUse
 from ._validation import validate_config_keys, warn_on_tool_choice_not_supported
 from .model import Model
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +91,36 @@ class LlamaAPIModel(Model):
             The Llama API model configuration.
         """
         return self.config
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this LlamaAPI model supports native structured output capabilities.
+
+        Returns:
+            False since LlamaAPI doesn't support native structured output,
+            only function calling.
+        """
+        # LlamaAPI doesn't have structured output support like OpenAI
+        # It only supports function calling for structured output
+        return False
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get LlamaAPI-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing LlamaAPI-specific structured output configuration.
+        """
+        # LlamaAPI uses function calling for structured output
+        # No special configuration needed beyond tool specs
+        config = {
+            "response_format": "function_calling",
+        }
+
+        return config
 
     def _format_request_message_content(self, content: ContentBlock) -> dict[str, Any]:
         """Format a LlamaAPI content block.

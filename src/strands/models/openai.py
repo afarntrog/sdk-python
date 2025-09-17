@@ -87,6 +87,42 @@ class OpenAIModel(Model):
         """
         return cast(OpenAIModel.OpenAIConfig, self.config)
 
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this OpenAI model supports native structured output capabilities.
+
+        Returns:
+            True if the model supports OpenAI's structured outputs feature,
+            False if it only supports function calling.
+        """
+        # OpenAI supports native structured output for compatible models
+        # For now, we'll return True for most models, but this could be refined
+        # to check specific model capabilities
+        model_id = self.config.get("model_id", "")
+
+        # Most OpenAI models support structured outputs
+        return True
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get OpenAI-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing OpenAI-specific structured output configuration.
+        """
+        # OpenAI structured outputs can use strict mode for better adherence
+        config = {
+            "response_format": "json_schema",
+            "strict": True,  # Use strict mode by default for better compliance
+        }
+
+        # If the output schema has specific settings, we could apply them here
+        # For now, we use defaults that work well with OpenAI
+        return config
+
     @classmethod
     def format_request_message_content(cls, content: ContentBlock) -> dict[str, Any]:
         """Format an OpenAI compatible content block.

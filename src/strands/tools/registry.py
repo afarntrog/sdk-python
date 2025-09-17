@@ -34,6 +34,7 @@ class ToolRegistry:
         self.registry: Dict[str, AgentTool] = {}
         self.dynamic_tools: Dict[str, AgentTool] = {}
         self.tool_config: Optional[Dict[str, Any]] = None
+        self.temporary_tools: Dict[str, AgentTool] = {}  # For structured output tools
 
     def process_tools(self, tools: List[Any]) -> List[str]:
         """Process tools list that can contain tool names, paths, imported modules, or functions.
@@ -495,6 +496,89 @@ class ToolRegistry:
         all_tools = self.get_all_tools_config()
         tools: List[ToolSpec] = [tool_spec for tool_spec in all_tools.values()]
         return tools
+
+    def register_temporary_tool(self, tool: AgentTool) -> None:
+        """Register a temporary tool for structured output during event loop execution.
+
+        Args:
+            tool: The tool to register temporarily.
+
+        Note:
+            Temporary tools are automatically cleaned up and do not persist beyond
+            the current event loop cycle. They take precedence over regular tools
+            with the same name during execution.
+        """
+        logger.debug(
+            "tool_name=<%s>, tool_type=<%s> | registering temporary tool",
+            tool.tool_name,
+            tool.tool_type,
+        )
+        self.temporary_tools[tool.tool_name] = tool
+
+    def unregister_temporary_tool(self, tool_name: str) -> None:
+        """Unregister a temporary tool.
+
+        Args:
+            tool_name: Name of the tool to unregister.
+        """
+        if tool_name in self.temporary_tools:
+            del self.temporary_tools[tool_name]
+            logger.debug("tool_name=<%s> | unregistered temporary tool", tool_name)
+
+    def clear_temporary_tools(self) -> None:
+        """Clear all temporary tools.
+
+        This is typically called at the end of an event loop cycle to clean up
+        structured output tools.
+        """
+        if self.temporary_tools:
+            logger.debug("temporary_tool_count=<%d> | clearing temporary tools", len(self.temporary_tools))
+            self.temporary_tools.clear()
+
+    def get_all_tool_specs_with_temporary(self) -> list[ToolSpec]:
+        """Get all tool specs including temporary tools.
+
+        Returns:
+            A list of ToolSpecs including both regular and temporary tools.
+            Temporary tools take precedence over regular tools with the same name.
+        """
+        all_tools = self.get_all_tools_config()
+
+        # Add temporary tools (they override regular tools with same name)
+        for tool_name, tool in self.temporary_tools.items():
+            try:
+                # Make a deep copy to avoid modifying the original
+                spec = tool.tool_spec.copy()
+                # Normalize the schema before validation
+                spec = normalize_tool_spec(spec)
+                self.validate_tool_spec(spec)
+                all_tools[tool_name] = spec
+                logger.debug("tool_name=<%s> | added temporary tool to specs", tool_name)
+            except ValueError as e:
+                logger.warning("tool_name=<%s> | temporary tool spec validation failed | %s", tool_name, e)
+
+        tools: List[ToolSpec] = [tool_spec for tool_spec in all_tools.values()]
+        return tools
+
+    def get_tool(self, tool_name: str) -> Optional[AgentTool]:
+        """Get a tool by name, checking temporary tools first.
+
+        Args:
+            tool_name: Name of the tool to retrieve.
+
+        Returns:
+            The AgentTool instance if found, None otherwise.
+            Temporary tools take precedence over regular tools.
+        """
+        # Check temporary tools first
+        if tool_name in self.temporary_tools:
+            return self.temporary_tools[tool_name]
+
+        # Check regular registry
+        if tool_name in self.registry:
+            return self.registry[tool_name]
+
+        return None
 
     def validate_tool_spec(self, tool_spec: ToolSpec) -> None:
         """Validate tool specification against required schema.

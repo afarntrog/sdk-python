@@ -57,8 +57,8 @@ class ToolExecutor(abc.ABC):
         logger.debug("tool_use=<%s> | streaming", tool_use)
         tool_name = tool_use["name"]
 
-        tool_info = agent.tool_registry.dynamic_tools.get(tool_name)
-        tool_func = tool_info if tool_info is not None else agent.tool_registry.registry.get(tool_name)
+        # Use the enhanced get_tool method that checks temporary tools first
+        tool_func = agent.tool_registry.get_tool(tool_name)
 
         invocation_state.update(
             {
@@ -66,7 +66,7 @@ class ToolExecutor(abc.ABC):
                 "messages": agent.messages,
                 "system_prompt": agent.system_prompt,
                 "tool_config": ToolConfig(  # for backwards compatibility
-                    tools=[{"toolSpec": tool_spec} for tool_spec in agent.tool_registry.get_all_tool_specs()],
+                    tools=[{"toolSpec": tool_spec} for tool_spec in agent.tool_registry.get_all_tool_specs_with_temporary()],
                     toolChoice=cast(ToolChoice, {"auto": ToolChoiceAuto()}),
                 ),
             }

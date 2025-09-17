@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import random
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import (
     Any,
@@ -503,6 +504,10 @@ class Agent:
     def structured_output(self, output_model: Type[T], prompt: AgentInput = None) -> T:
         """This method allows you to get structured output from the agent.
 
+        .. deprecated:: 1.0.0
+            Use `agent(prompt, output_type=YourModel).get_structured_output(YourModel)` instead.
+            This method will be removed in a future version.
+
         If you pass in a prompt, it will be used temporarily without adding it to the conversation history.
         If you don't pass in a prompt, it will use only the existing conversation history to respond.
 
@@ -518,19 +523,29 @@ class Agent:
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
 
+        Returns:
+            The structured output parsed as the specified model type.
+
         Raises:
             ValueError: If no conversation history or prompt is provided.
         """
+        warnings.warn(
+            "structured_output() is deprecated. Use agent(prompt, output_type=YourModel).get_structured_output(YourModel) instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
 
-        def execute() -> T:
-            return asyncio.run(self.structured_output_async(output_model, prompt))
-
-        with ThreadPoolExecutor() as executor:
-            future = executor.submit(execute)
-            return future.result()
+        # Use the new system internally
+        result = self(prompt, output_type=output_model)
+        return result.get_structured_output(output_model)
 
     async def structured_output_async(self, output_model: Type[T], prompt: AgentInput = None) -> T:
         """This method allows you to get structured output from the agent.
+
+        .. deprecated:: 1.0.0
+            Use `await agent.stream_async(prompt, output_schema=OutputSchema([YourModel]))` and extract
+            the structured output from the final result instead.
+            This method will be removed in a future version.
 
         If you pass in a prompt, it will be used temporarily without adding it to the conversation history.
         If you don't pass in a prompt, it will use only the existing conversation history to respond.
@@ -543,48 +558,47 @@ class Agent:
                 that the agent will use when responding.
             prompt: The prompt to use for the agent (will not be added to conversation history).
 
+        Returns:
+            The structured output parsed as the specified model type.
+
         Raises:
             ValueError: If no conversation history or prompt is provided.
         """
-        self.hooks.invoke_callbacks(BeforeInvocationEvent(agent=self))
-        with self.tracer.tracer.start_as_current_span(
-            "execute_structured_output", kind=trace_api.SpanKind.CLIENT
-        ) as structured_output_span:
-            try:
-                if not self.messages and not prompt:
-                    raise ValueError("No conversation history or prompt provided")
+        warnings.warn(
+            "structured_output_async() is deprecated. Use the new async streaming interface instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
 
-                temp_messages: Messages = self.messages + self._convert_prompt_to_messages(prompt)
+        # Use the new system internally by creating a temporary Agent with the output type
+        from ..output.base import OutputSchema
 
-                structured_output_span.set_attributes(
-                    {
-                        "gen_ai.system": "strands-agents",
-                        "gen_ai.agent.name": self.name,
-                        "gen_ai.agent.id": self.agent_id,
-                        "gen_ai.operation.name": "execute_structured_output",
-                    }
-                )
-                if self.system_prompt:
-                    structured_output_span.add_event(
-                        "gen_ai.system.message",
-                        attributes={"role": "system", "content": serialize([{"text": self.system_prompt}])},
-                    )
-                for message in temp_messages:
-                    structured_output_span.add_event(
-                        f"gen_ai.{message['role']}.message",
-                        attributes={"role": message["role"], "content": serialize(message["content"])},
-                    )
-                events = self.model.structured_output(output_model, temp_messages, system_prompt=self.system_prompt)
-                async for event in events:
-                    if "callback" in event:
-                        self.callback_handler(**cast(dict, event["callback"]))
-                structured_output_span.add_event(
-                    "gen_ai.choice", attributes={"message": serialize(event["output"].model_dump())}
-                )
-                return event["output"]
+        # Create output schema for this single type
+        output_schema = OutputSchema([output_model])
 
-            finally:
-                self.hooks.invoke_callbacks(AfterInvocationEvent(agent=self))
+        # Stream events and get the final result
+        events = self.stream_async(prompt, output_schema=output_schema)
+        async for event in events:
+            if hasattr(event, 'get') and event.get('result'):
+                result = event['result']
+                if hasattr(result, 'get_structured_output'):
+                    return result.get_structured_output(output_model)
+            # Handle final event with AgentResult
+            if isinstance(event, dict) and 'result' in event:
+                result = event['result']
+                if hasattr(result, 'get_structured_output'):
+                    return result.get_structured_output(output_model)
+
+        # Fallback to the old model.structured_output method if the new system fails
+        if not self.messages and not prompt:
+            raise ValueError("No conversation history or prompt provided")
+
+        temp_messages = self.messages + self._convert_prompt_to_messages(prompt)
+        events = self.model.structured_output(output_model, temp_messages, system_prompt=self.system_prompt)
+        async for event in events:
+            if "callback" in event:
+                self.callback_handler(**cast(dict, event["callback"]))
+        return event["output"]
 
     async def stream_async(
         self,

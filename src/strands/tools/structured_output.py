@@ -1,6 +1,6 @@
 """Tools for converting Pydantic models to Bedrock tools."""
 
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from pydantic import BaseModel
 
@@ -402,3 +402,87 @@ def _process_properties(schema_def: Dict[str, Any], model: Type[BaseModel]) -> N
             # Add field description if available and not already set
             if field and field.description and not prop_info.get("description"):
                 prop_info["description"] = field.description
+
+
+def convert_pydantic_models_to_tool_specs(
+    models: List[Type[BaseModel]],
+    description_prefix: Optional[str] = None
+) -> List[ToolSpec]:
+    """Converts multiple Pydantic models to tool specifications.
+
+    This function creates a tool spec for each model, making them available
+    as structured output options for the agent.
+
+    Args:
+        models: List of Pydantic model classes to convert
+        description_prefix: Optional prefix for tool descriptions
+
+    Returns:
+        List of ToolSpec dictionaries, one for each model
+    """
+    tool_specs = []
+
+    for model in models:
+        # Create a description for the tool
+        description = f"{description_prefix} - {model.__name__}" if description_prefix else None
+        if not description and model.__doc__:
+            description = model.__doc__.strip()
+
+        tool_spec = convert_pydantic_to_tool_spec(model, description)
+        tool_specs.append(tool_spec)
+
+    return tool_specs
+
+
+def get_model_name_from_tool_spec(tool_spec: ToolSpec) -> str:
+    """Extract the model name from a tool specification.
+
+    Args:
+        tool_spec: The tool specification
+
+    Returns:
+        The model name (tool name)
+    """
+    return tool_spec["name"]
+
+
+def validate_structured_output_result(result: Any, expected_type: Type[BaseModel]) -> BaseModel:
+    """Validate and parse a structured output result against the expected type.
+
+    Args:
+        result: The raw result from tool execution
+        expected_type: The expected Pydantic model type
+
+    Returns:
+        Validated and parsed model instance
+
+    Raises:
+        ValueError: If validation fails
+        TypeError: If the result cannot be converted to the expected type
+    """
+    try:
+        # If result is already the correct type, return it
+        if isinstance(result, expected_type):
+            return result
+
+        # If result is a dict, try to create the model instance
+        if isinstance(result, dict):
+            return expected_type(**result)
+
+        # If result is a string, try to parse it as JSON first
+        if isinstance(result, str):
+            import json
+            try:
+                parsed = json.loads(result)
+                if isinstance(parsed, dict):
+                    return expected_type(**parsed)
+            except json.JSONDecodeError:
+                pass
+
+        # Try to convert directly
+        return expected_type(result)
+
+    except Exception as e:
+        raise ValueError(
+            f"Failed to validate structured output result as {expected_type.__name__}: {e}"
+        ) from e

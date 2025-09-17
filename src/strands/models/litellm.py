@@ -5,7 +5,7 @@
 
 import json
 import logging
-from typing import Any, AsyncGenerator, Optional, Type, TypedDict, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Type, TypedDict, TypeVar, Union, cast
 
 import litellm
 from litellm.utils import supports_response_schema
@@ -17,6 +17,9 @@ from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolSpec
 from ._validation import validate_config_keys
 from .openai import OpenAIModel
+
+if TYPE_CHECKING:
+    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +78,39 @@ class LiteLLMModel(OpenAIModel):
             The LiteLLM model configuration.
         """
         return cast(LiteLLMModel.LiteLLMConfig, self.config)
+
+    @override
+    def supports_native_structured_output(self) -> bool:
+        """Check if this LiteLLM model supports native structured output capabilities.
+
+        Returns:
+            True if the underlying model supports response schemas,
+            False otherwise.
+        """
+        model_id = self.config.get("model_id", "")
+        return supports_response_schema(model_id)
+
+    @override
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get LiteLLM-specific configuration for structured output.
+
+        Args:
+            output_schema: The output schema configuration
+
+        Returns:
+            Dictionary containing LiteLLM-specific structured output configuration.
+        """
+        # LiteLLM supports response_format for compatible models
+        config = {
+            "response_format": "json_schema",
+        }
+
+        # Check if model supports native structured output
+        model_id = self.config.get("model_id", "")
+        if supports_response_schema(model_id):
+            config["strict"] = True  # Use strict mode if supported
+
+        return config
 
     @override
     @classmethod
