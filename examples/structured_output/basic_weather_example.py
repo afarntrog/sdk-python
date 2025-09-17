@@ -8,7 +8,9 @@ It shows how to define a Pydantic model and get structured data from the agent.
 
 import asyncio
 from typing import Optional
+
 from pydantic import BaseModel, Field
+
 from strands import Agent, ToolOutput
 
 
@@ -93,7 +95,7 @@ async def async_example():
             result = event['result']
             if result.structured_output:
                 weather = result.get_structured_output(WeatherReport)
-                print(f"\n🎯 Final Result:")
+                print("\n🎯 Final Result:")
                 print(f"   {weather.location}: {weather.temperature}°F")
                 break
 

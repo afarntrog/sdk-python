@@ -32,8 +32,6 @@ from opentelemetry import trace as trace_api
 from pydantic import BaseModel
 
 from .. import _identifier
-from ..output import OutputMode, OutputSchema, get_global_registry
-from ..types.output import OutputTypeSpec
 from ..event_loop.event_loop import event_loop_cycle
 from ..handlers.callback_handler import PrintingCallbackHandler, null_callback_handler
 from ..hooks import (
@@ -46,9 +44,10 @@ from ..hooks import (
 )
 from ..models.bedrock import BedrockModel
 from ..models.model import Model
+from ..output import OutputMode, OutputSchema, get_global_registry
 from ..session.session_manager import SessionManager
 from ..telemetry.metrics import EventLoopMetrics
-from ..telemetry.tracer import get_tracer, serialize
+from ..telemetry.tracer import get_tracer
 from ..tools.executors import ConcurrentToolExecutor
 from ..tools.executors._executor import ToolExecutor
 from ..tools.registry import ToolRegistry
@@ -220,7 +219,7 @@ class Agent:
         record_direct_tool_call: bool = True,
         load_tools_from_directory: bool = False,
         trace_attributes: Optional[Mapping[str, AttributeValue]] = None,
-        output_type: Optional[OutputTypeSpec] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional[OutputMode] = None,
         *,
         agent_id: Optional[str] = None,
@@ -260,9 +259,9 @@ class Agent:
             load_tools_from_directory: Whether to load and automatically reload tools in the `./tools/` directory.
                 Defaults to False.
             trace_attributes: Custom trace attributes to apply to the agent's trace span.
-            output_type: Default output type for structured output. Can be a single Pydantic model,
-                list of models, or OutputSchema. When specified, all agent calls will return
-                structured output unless overridden. Defaults to None (text output).
+            output_type: Default output type for structured output. Should be a Pydantic BaseModel
+                class. When specified, all agent calls will return structured output unless
+                overridden. Defaults to None (text output).
             output_mode: Default output mode for structured output processing. Options are
                 ToolOutput (function calling), NativeOutput (model native), or PromptedOutput
                 (prompting). Defaults to ToolOutput when output_type is specified.
@@ -390,12 +389,12 @@ class Agent:
         return list(all_tools.keys())
 
     def _resolve_output_schema(
-        self, output_type: Optional[OutputTypeSpec], output_mode: Optional[OutputMode]
+        self, output_type: Optional[Type[BaseModel]], output_mode: Optional[OutputMode]
     ) -> Optional[OutputSchema]:
         """Resolve output type and mode into OutputSchema with tool-based default.
 
         Args:
-            output_type: Output type specification
+            output_type: Output type (Pydantic BaseModel class)
             output_mode: Optional output mode
 
         Returns:
@@ -417,7 +416,7 @@ class Agent:
     def __call__(
         self,
         prompt: AgentInput = None,
-        output_type: Optional[OutputTypeSpec] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional[OutputMode] = None,
         **kwargs: Any
     ) -> AgentResult:
@@ -435,9 +434,8 @@ class Agent:
                 - list[ContentBlock]: Multi-modal content blocks
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
-            output_type: Output type specification for structured output. Overrides
-                agent's default output_type if provided. Can be a single Pydantic model,
-                list of models, or OutputSchema.
+            output_type: Output type for structured output. Overrides agent's default
+                output_type if provided. Should be a Pydantic BaseModel class.
             output_mode: Output mode for structured output processing. Overrides
                 agent's default output_mode if provided. Options are ToolOutput,
                 NativeOutput, or PromptedOutput.
@@ -463,7 +461,7 @@ class Agent:
     async def invoke_async(
         self,
         prompt: AgentInput = None,
-        output_type: Optional[OutputTypeSpec] = None,
+        output_type: Optional[Type[BaseModel]] = None,
         output_mode: Optional[OutputMode] = None,
         **kwargs: Any
     ) -> AgentResult:

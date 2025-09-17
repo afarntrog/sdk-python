@@ -1,7 +1,7 @@
 """Base classes for the structured output system."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Type, TypeVar, Union, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional, Type, TypeVar, Union
 
 from pydantic import BaseModel
 

@@ -11,12 +11,12 @@ This example demonstrates practical use cases for structured output in real-worl
 This shows the power of structured output for data extraction and processing tasks.
 """
 
-from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Union
-from pydantic import BaseModel, Field, validator
-from strands import Agent, ToolOutput
+from typing import List, Optional
 
+from pydantic import BaseModel, Field, validator
+
+from strands import Agent, ToolOutput
 
 # === Contact Information Extraction ===
 
@@ -311,17 +311,17 @@ def process_meeting_notes():
     print(f"📅 Meeting: {notes.meeting_title} ({notes.date})")
     print(f"👥 Attendees: {', '.join(notes.attendees)}")
 
-    print(f"\n🎯 Key Topics:")
+    print("\n🎯 Key Topics:")
     for topic in notes.key_topics:
         print(f"  • {topic}")
 
-    print(f"\n✅ Decisions Made:")
+    print("\n✅ Decisions Made:")
     for i, decision in enumerate(notes.decisions, 1):
         print(f"  {i}. {decision.decision}")
         if decision.rationale:
             print(f"     Rationale: {decision.rationale}")
 
-    print(f"\n📋 Action Items:")
+    print("\n📋 Action Items:")
     for item in notes.action_items:
         assignee = f" ({item.assignee})" if item.assignee else ""
         due_date = f" - Due: {item.due_date}" if item.due_date else ""

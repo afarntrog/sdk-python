@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, Type, TypeVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 

@@ -2,7 +2,7 @@
 
 import abc
 import logging
-from typing import Any, AsyncGenerator, AsyncIterable, Optional, Type, TypeVar, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Optional, Type, TypeVar, Union
 
 from pydantic import BaseModel
 

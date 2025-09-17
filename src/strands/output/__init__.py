@@ -5,8 +5,8 @@ while maintaining backward compatibility. The system defaults to tool-based outp
 """
 
 from .base import OutputMode, OutputSchema
-from .modes import ToolOutput, NativeOutput, PromptedOutput
-from .registry import OutputRegistry, get_global_registry, clear_global_cache
+from .modes import NativeOutput, PromptedOutput, ToolOutput
+from .registry import OutputRegistry, clear_global_cache, get_global_registry
 
 __all__ = [
     "OutputMode",

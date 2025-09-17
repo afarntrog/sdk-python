@@ -12,9 +12,11 @@ This helps you understand when to use each mode and their trade-offs.
 
 import time
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
+
 from strands import Agent
-from strands.output import ToolOutput, NativeOutput, PromptedOutput, OutputSchema
+from strands.output import NativeOutput, PromptedOutput, ToolOutput
 
 
 class ProductReview(BaseModel):

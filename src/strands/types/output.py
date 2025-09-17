@@ -1,19 +1,13 @@
 """Type definitions for structured output system."""
 
-from typing import Union, Type, TypeVar
+from typing import Type, TypeVar, Union
+
 from pydantic import BaseModel
 
-from ..output.base import OutputSchema, OutputMode
+from ..output.base import OutputMode
 
 # Type variable for generic structured output
 T = TypeVar("T", bound=BaseModel)
-
-# Type alias for output type specifications that can be passed to agents
-OutputTypeSpec = Union[
-    Type[BaseModel],              # Single output type
-    list[Type[BaseModel]],        # Multiple possible output types
-    OutputSchema,                 # Complete output schema with mode
-]
 
 # Type alias for output mode specifications
 OutputModeSpec = Union[
@@ -24,6 +18,5 @@ OutputModeSpec = Union[
 
 __all__ = [
     "T",
-    "OutputTypeSpec",
     "OutputModeSpec",
 ]

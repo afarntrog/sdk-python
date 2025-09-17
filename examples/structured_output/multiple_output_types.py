@@ -8,8 +8,10 @@ allowing the agent to choose the most appropriate response type based on the inp
 
 from enum import Enum
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
-from strands import Agent, ToolOutput
+
+from strands import Agent
 from strands.output import OutputSchema
 
 

@@ -1,14 +1,13 @@
 """Output type registry and resolution system."""
 
 import logging
-import weakref
-from typing import Any, Dict, Type, Optional, Union, TypeVar, TYPE_CHECKING
 from functools import lru_cache
+from typing import TYPE_CHECKING, Dict, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
 from .base import OutputMode, OutputSchema
-from .modes import ToolOutput, NativeOutput, PromptedOutput
+from .modes import NativeOutput, PromptedOutput, ToolOutput
 
 if TYPE_CHECKING:
     from ..models.model import Model
@@ -18,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-# Type alias for output type specifications
-OutputTypeSpec = Union[Type[BaseModel], list[Type[BaseModel]], OutputSchema]
 
 
 class OutputRegistry:
@@ -40,14 +37,14 @@ class OutputRegistry:
 
     def resolve_output_schema(
         self,
-        output_type: Optional[OutputTypeSpec],
+        output_type: Optional[Type[BaseModel]],
         output_mode: Optional[OutputMode] = None,
         model: Optional["Model"] = None,
     ) -> Optional[OutputSchema]:
         """Resolve output type specification into OutputSchema.
 
         Args:
-            output_type: Output type specification
+            output_type: Output type (Pydantic BaseModel class)
             output_mode: Optional output mode (defaults to ToolOutput)
             model: Model instance for compatibility checking
 
@@ -60,11 +57,9 @@ class OutputRegistry:
         if not output_type:
             return None
 
-        # If already an OutputSchema, validate and return
-        if isinstance(output_type, OutputSchema):
-            if model:
-                self._validate_schema_compatibility(output_type, model)
-            return output_type
+        # Validate that output_type is a BaseModel subclass
+        if not isinstance(output_type, type) or not issubclass(output_type, BaseModel):
+            raise ValueError(f"output_type must be a Pydantic BaseModel subclass, got {type(output_type)}")
 
         # Create cache key for schema resolution
         cache_key = self._get_schema_cache_key(output_type, output_mode)
@@ -79,8 +74,8 @@ class OutputRegistry:
         # Resolve output mode with model compatibility checking
         resolved_mode = self._resolve_output_mode(output_mode, model)
 
-        # Create new schema
-        schema = OutputSchema(types=output_type, mode=resolved_mode)
+        # Create new schema with single type wrapped in list
+        schema = OutputSchema(types=[output_type], mode=resolved_mode)
 
         # Cache the schema
         self._schema_cache[cache_key] = schema
@@ -247,23 +242,18 @@ class OutputRegistry:
         return is_supported
 
     def _get_schema_cache_key(
-        self, output_type: OutputTypeSpec, output_mode: Optional[OutputMode]
+        self, output_type: Type[BaseModel], output_mode: Optional[OutputMode]
     ) -> str:
         """Generate cache key for schema resolution.
 
         Args:
-            output_type: Output type specification
+            output_type: Output type (BaseModel class)
             output_mode: Output mode
 
         Returns:
             Cache key string
         """
-        # Handle different output type formats
-        if isinstance(output_type, list):
-            type_names = sorted([t.__name__ for t in output_type])
-            type_key = f"[{','.join(type_names)}]"
-        else:
-            type_key = output_type.__name__
+        type_key = output_type.__name__
 
         mode_key = output_mode.__class__.__name__ if output_mode else "ToolOutput"
 
