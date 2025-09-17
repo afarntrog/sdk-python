@@ -388,7 +388,6 @@ async def _handle_tool_execution(
                     # Create trace and metrics using the same pattern as ToolExecutor._stream_with_trace
                     # This ensures consistency with regular tool execution tracing
                     import time
-                    from ..telemetry.tracer import get_tracer
                     
                     tracer = get_tracer()
                     tool_call_span = tracer.start_tool_call_span(tool_use, cycle_span)
@@ -451,6 +450,7 @@ async def _handle_tool_execution(
     yield ToolResultMessageEvent(message=tool_result_message)
 
     if cycle_span:
+        # TODO here is the error
         tracer = get_tracer()
         tracer.end_event_loop_cycle_span(span=cycle_span, message=message, tool_result_message=tool_result_message)
 
