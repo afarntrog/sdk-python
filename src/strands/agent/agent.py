@@ -408,7 +408,15 @@ class Agent:
 
         registry = get_global_registry()
         try:
-            return registry.resolve_output_schema(output_type, output_mode, self.model)
+            schema = registry.resolve_output_schema(output_type, output_mode)
+            
+            # Check model compatibility and fallback if needed
+            if schema and not schema.mode.is_supported_by_model(self.model):
+                logger.warning(f"Output mode {schema.mode.__class__.__name__} not supported by model, falling back to ToolOutput")
+                from ..output.modes import ToolOutput
+                schema.mode = ToolOutput()
+            
+            return schema
         except Exception as e:
             logger.error(f"Failed to resolve output schema: {e}")
             raise ValueError(f"Invalid output configuration: {e}") from e

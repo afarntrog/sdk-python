@@ -455,3 +455,27 @@ class WriterModel(Model):
             yield {"output": output_model.model_validate_json(content)}
         except Exception as e:
             raise ValueError(f"Failed to parse or load content into model: {e}") from e
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        Writer models use function_calling for structured output.
+        
+        Returns:
+            False - Writer uses function_calling approach
+        """
+        return False
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for Writer structured output
+        """
+        return {
+            "approach": "function_calling",
+            "supports_multiple_tools": True
+        }

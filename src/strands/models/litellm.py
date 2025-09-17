@@ -5,7 +5,7 @@
 
 import json
 import logging
-from typing import Any, AsyncGenerator, Optional, Type, TypedDict, TypeVar, Union, cast
+from typing import Any, AsyncGenerator, Dict, Optional, Type, TypedDict, TypeVar, Union, cast
 
 import litellm
 from litellm.utils import supports_response_schema
@@ -241,3 +241,27 @@ class LiteLLMModel(OpenAIModel):
             model_id = self.get_config()["model_id"]
             if not model_id.startswith("litellm_proxy/"):
                 self.config["model_id"] = f"litellm_proxy/{model_id}"
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        LiteLLM models use function calling for structured output.
+        
+        Returns:
+            False - LiteLLM uses function calling approach
+        """
+        return False
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for LiteLLM structured output
+        """
+        return {
+            "approach": "function_calling",
+            "supports_multiple_tools": True
+        }

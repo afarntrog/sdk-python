@@ -1,335 +1,154 @@
-"""Output type registry and resolution system."""
+"""Output type registry and utilities."""
 
-import logging
-import weakref
-from typing import Any, Dict, Type, Optional, Union, TypeVar, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Type, Union
 from functools import lru_cache
 
-from pydantic import BaseModel
-
 from .base import OutputMode, OutputSchema
-from .modes import ToolOutput, NativeOutput, PromptedOutput
-
-if TYPE_CHECKING:
-    from ..models.model import Model
-    from ..types.tools import ToolSpec
-
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T", bound=BaseModel)
-
-# Type alias for output type specifications
-OutputTypeSpec = Union[Type[BaseModel], list[Type[BaseModel]], OutputSchema]
+from .modes import ToolOutput
 
 
 class OutputRegistry:
-    """Registry for managing output type specifications and caching.
-
-    This registry handles:
-    - Resolution of output type specifications
-    - Caching of tool specifications
-    - Validation of output schemas
-    - Model compatibility checking
-    """
-
+    """Registry for managing output types and schemas."""
+    
     def __init__(self):
-        """Initialize the output registry."""
-        self._tool_spec_cache: Dict[str, list["ToolSpec"]] = {}
-        self._schema_cache: Dict[str, OutputSchema] = {}
-        self._model_compatibility_cache: Dict[str, Dict[str, bool]] = {}
-
+        self._schemas: Dict[str, OutputSchema] = {}
+        self._tool_spec_cache: Dict[str, List[Dict[str, Any]]] = {}
+    
+    def register_schema(self, name: str, schema: OutputSchema) -> None:
+        """Register an output schema by name."""
+        self._schemas[name] = schema
+        # Clear cache for this schema
+        cache_key = f"{name}_{id(schema.output_type)}"
+        self._tool_spec_cache.pop(cache_key, None)
+    
+    def get_schema(self, name: str) -> Optional[OutputSchema]:
+        """Get a registered schema by name."""
+        return self._schemas.get(name)
+    
     def resolve_output_schema(
         self,
-        output_type: Optional[OutputTypeSpec],
+        output_type: Optional[Union[Type, List[Type], "OutputSchema"]] = None,
         output_mode: Optional[OutputMode] = None,
-        model: Optional["Model"] = None,
-    ) -> Optional[OutputSchema]:
-        """Resolve output type specification into OutputSchema.
-
-        Args:
-            output_type: Output type specification
-            output_mode: Optional output mode (defaults to ToolOutput)
-            model: Model instance for compatibility checking
-
-        Returns:
-            Resolved OutputSchema or None if no output type specified
-
-        Raises:
-            ValueError: If output specification is invalid or incompatible
-        """
-        if not output_type:
-            return None
-
-        # If already an OutputSchema, validate and return
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        default_schema: Optional[OutputSchema] = None
+    ) -> OutputSchema:
+        """Resolve output schema from various inputs."""
+        # If output_type is already an OutputSchema, return it
         if isinstance(output_type, OutputSchema):
-            if model:
-                self._validate_schema_compatibility(output_type, model)
             return output_type
-
-        # Create cache key for schema resolution
-        cache_key = self._get_schema_cache_key(output_type, output_mode)
-
-        # Check cache first
-        if cache_key in self._schema_cache:
-            cached_schema = self._schema_cache[cache_key]
-            if model:
-                self._validate_schema_compatibility(cached_schema, model)
-            return cached_schema
-
-        # Resolve output mode with model compatibility checking
-        resolved_mode = self._resolve_output_mode(output_mode, model)
-
+        
+        # If name is provided, try to get registered schema
+        if name and name in self._schemas:
+            registered = self._schemas[name]
+            # Override with provided parameters
+            return OutputSchema(
+                output_type=output_type or registered.output_type,
+                mode=output_mode or registered.mode,
+                name=name,
+                description=description or registered.description
+            )
+        
+        # Use default schema if provided and no specific type/mode
+        if default_schema and not output_type and not output_mode:
+            return default_schema
+        
+        # Handle list of types (for now, just use the first one)
+        if isinstance(output_type, list) and output_type:
+            output_type = output_type[0]
+        
         # Create new schema
-        schema = OutputSchema(types=output_type, mode=resolved_mode)
-
-        # Cache the schema
-        self._schema_cache[cache_key] = schema
-
-        return schema
-
-    def get_tool_specs(self, schema: OutputSchema) -> list["ToolSpec"]:
-        """Get tool specifications for an output schema.
-
-        Args:
-            schema: Output schema to generate tools for
-
-        Returns:
-            List of tool specifications
-
-        Raises:
-            ValueError: If tool spec generation fails
-        """
-        # Create cache key
-        cache_key = self._get_tool_spec_cache_key(schema)
-
-        # Check cache first
-        if cache_key in self._tool_spec_cache:
-            return self._tool_spec_cache[cache_key]
-
-        try:
-            # Generate tool specs
-            tool_specs = schema.mode.get_tool_specs(schema.types)
-
-            # Cache the result
-            self._tool_spec_cache[cache_key] = tool_specs
-
-            return tool_specs
-
-        except Exception as e:
-            logger.error(f"Failed to generate tool specs for schema {schema}: {e}")
-            raise ValueError(f"Cannot generate tool specifications: {e}") from e
-
-    def validate_output_types(self, output_types: list[Type[BaseModel]]) -> None:
-        """Validate that output types are valid Pydantic models.
-
-        Args:
-            output_types: List of output types to validate
-
-        Raises:
-            ValueError: If any output type is invalid
-        """
-        for output_type in output_types:
-            if not isinstance(output_type, type) or not issubclass(output_type, BaseModel):
-                raise ValueError(f"Output type {output_type} must be a Pydantic BaseModel subclass")
-
-            # Validate that the model can generate a JSON schema
-            try:
-                output_type.model_json_schema()
-            except Exception as e:
-                raise ValueError(f"Cannot generate JSON schema for {output_type.__name__}: {e}") from e
-
-    def clear_cache(self) -> None:
-        """Clear all cached data."""
-        self._tool_spec_cache.clear()
-        self._schema_cache.clear()
-        self._model_compatibility_cache.clear()
-
-    def get_cache_stats(self) -> Dict[str, int]:
-        """Get cache statistics.
-
-        Returns:
-            Dictionary with cache sizes
-        """
-        return {
-            "tool_spec_cache_size": len(self._tool_spec_cache),
-            "schema_cache_size": len(self._schema_cache),
-            "compatibility_cache_size": len(self._model_compatibility_cache),
-        }
-
-    def _resolve_output_mode(
-        self, output_mode: Optional[OutputMode], model: Optional["Model"]
-    ) -> OutputMode:
-        """Resolve output mode with model compatibility checking.
-
-        Args:
-            output_mode: Requested output mode
-            model: Model instance for compatibility checking
-
-        Returns:
-            Compatible output mode (may fallback to ToolOutput)
-        """
-        # Default to ToolOutput if no mode specified
-        if not output_mode:
-            return ToolOutput()
-
-        # If no model provided, return as-is
-        if not model:
-            return output_mode
-
-        # Check if mode is supported by model
-        if self._is_mode_supported_by_model(output_mode, model):
-            return output_mode
-
-        # Handle fallback for unsupported modes
-        if isinstance(output_mode, NativeOutput):
-            logger.warning(
-                f"Model {model.__class__.__name__} does not support native structured output. "
-                "Falling back to tool-based approach."
-            )
-            return ToolOutput()
-
-        # PromptedOutput and ToolOutput should always be supported
-        logger.warning(
-            f"Model {model.__class__.__name__} unexpectedly doesn't support {output_mode.__class__.__name__}. "
-            "Falling back to tool-based approach."
+        return OutputSchema(
+            output_type=output_type,
+            mode=output_mode or ToolOutput(),
+            name=name,
+            description=description
         )
-        return ToolOutput()
-
-    def _validate_schema_compatibility(self, schema: OutputSchema, model: "Model") -> None:
-        """Validate that schema is compatible with model.
-
-        Args:
-            schema: Output schema to validate
-            model: Model to check compatibility with
-
-        Raises:
-            ValueError: If schema is incompatible with model
-        """
-        if not self._is_mode_supported_by_model(schema.mode, model):
-            raise ValueError(
-                f"Output mode {schema.mode.__class__.__name__} is not supported by "
-                f"model {model.__class__.__name__}"
-            )
-
-        # Validate output types
-        self.validate_output_types(schema.types)
-
-    def _is_mode_supported_by_model(self, mode: OutputMode, model: "Model") -> bool:
-        """Check if output mode is supported by model with caching.
-
-        Args:
-            mode: Output mode to check
-            model: Model to check compatibility with
-
-        Returns:
-            True if mode is supported by model
-        """
-        model_key = model.__class__.__name__
-        mode_key = mode.__class__.__name__
-
-        # Check cache
-        if model_key in self._model_compatibility_cache:
-            if mode_key in self._model_compatibility_cache[model_key]:
-                return self._model_compatibility_cache[model_key][mode_key]
-
-        # Check compatibility
-        try:
-            is_supported = mode.is_supported_by_model(model)
-        except Exception as e:
-            logger.warning(f"Error checking {mode_key} support for {model_key}: {e}")
-            is_supported = False
-
-        # Cache result
-        if model_key not in self._model_compatibility_cache:
-            self._model_compatibility_cache[model_key] = {}
-        self._model_compatibility_cache[model_key][mode_key] = is_supported
-
-        return is_supported
-
-    def _get_schema_cache_key(
-        self, output_type: OutputTypeSpec, output_mode: Optional[OutputMode]
-    ) -> str:
-        """Generate cache key for schema resolution.
-
-        Args:
-            output_type: Output type specification
-            output_mode: Output mode
-
-        Returns:
-            Cache key string
-        """
-        # Handle different output type formats
-        if isinstance(output_type, list):
-            type_names = sorted([t.__name__ for t in output_type])
-            type_key = f"[{','.join(type_names)}]"
-        else:
-            type_key = output_type.__name__
-
-        mode_key = output_mode.__class__.__name__ if output_mode else "ToolOutput"
-
-        return f"{type_key}:{mode_key}"
-
-    def _get_tool_spec_cache_key(self, schema: OutputSchema) -> str:
-        """Generate cache key for tool spec caching.
-
-        Args:
-            schema: Output schema
-
-        Returns:
-            Cache key string
-        """
-        type_names = sorted([t.__name__ for t in schema.types])
-        type_key = f"[{','.join(type_names)}]"
-        mode_key = schema.mode.__class__.__name__
-
-        # Include mode-specific parameters for more precise caching
-        if isinstance(schema.mode, PromptedOutput):
-            template_hash = hash(schema.mode.template)
-            mode_key = f"{mode_key}:{template_hash}"
-
-        return f"{type_key}:{mode_key}"
+    
+    def get_tool_specs(self, schema: OutputSchema) -> List[Dict[str, Any]]:
+        """Get cached tool specifications for a schema."""
+        if not schema.output_type:
+            return []
+        
+        cache_key = f"{schema.name or 'unnamed'}_{id(schema.output_type)}"
+        
+        if cache_key not in self._tool_spec_cache:
+            self._tool_spec_cache[cache_key] = schema.mode.get_tool_specs(schema.output_type)
+        
+        return self._tool_spec_cache[cache_key]
+    
+    def validate_schema(self, schema: OutputSchema) -> bool:
+        """Validate an output schema."""
+        if not isinstance(schema, OutputSchema):
+            return False
+        
+        if not isinstance(schema.mode, OutputMode):
+            return False
+        
+        # Check if output_type is a valid Pydantic model
+        if schema.output_type:
+            try:
+                # Check if it has Pydantic model characteristics
+                if not (hasattr(schema.output_type, 'model_fields') or 
+                       hasattr(schema.output_type, '__annotations__')):
+                    return False
+            except Exception:
+                return False
+        
+        return True
+    
+    def clear_cache(self) -> None:
+        """Clear the tool spec cache."""
+        self._tool_spec_cache.clear()
 
 
 # Global registry instance
-_global_registry: Optional[OutputRegistry] = None
+_global_registry = OutputRegistry()
 
 
 def get_global_registry() -> OutputRegistry:
-    """Get the global output registry instance.
-
-    Returns:
-        Global OutputRegistry instance
-    """
-    global _global_registry
-    if _global_registry is None:
-        _global_registry = OutputRegistry()
+    """Get the global output registry."""
     return _global_registry
 
 
+def convert_type_to_schema(
+    output_type: Type,
+    mode: Optional[OutputMode] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None
+) -> OutputSchema:
+    """Convert a type to an output schema."""
+    return OutputSchema(
+        output_type=output_type,
+        mode=mode or ToolOutput(),
+        name=name,
+        description=description
+    )
+
+
 @lru_cache(maxsize=128)
-def resolve_output_schema(
-    output_type_name: str,
-    output_mode_name: str = "ToolOutput",
-    model_name: Optional[str] = None,
-) -> str:
-    """Cached function for output schema resolution (for frequently used combinations).
-
-    This is a convenience function for caching common schema resolutions.
-
-    Args:
-        output_type_name: Name of the output type
-        output_mode_name: Name of the output mode
-        model_name: Optional model name for compatibility
-
-    Returns:
-        Serialized schema information
-    """
-    # This is a simplified caching mechanism for common patterns
-    # In practice, this would be used by the registry for frequently accessed schemas
-    return f"{output_type_name}:{output_mode_name}:{model_name or 'any'}"
+def get_type_name(output_type: Type) -> str:
+    """Get a string name for a type."""
+    if hasattr(output_type, '__name__'):
+        return output_type.__name__
+    return str(output_type)
 
 
-def clear_global_cache() -> None:
-    """Clear the global registry cache."""
-    registry = get_global_registry()
-    registry.clear_cache()
+def validate_output_type(output_type: Type) -> bool:
+    """Validate that a type can be used for structured output."""
+    if output_type is None:
+        return False
+    
+    # Check for Pydantic model
+    if hasattr(output_type, 'model_fields'):
+        return True
+    
+    # Check for dataclass
+    if hasattr(output_type, '__dataclass_fields__'):
+        return True
+    
+    # Check for TypedDict
+    if hasattr(output_type, '__annotations__') and hasattr(output_type, '__total__'):
+        return True
+    
+    return False

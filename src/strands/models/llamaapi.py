@@ -444,3 +444,27 @@ class LlamaAPIModel(Model):
         #     response_format=response_format,
         # )
         raise NotImplementedError("Strands sdk-python does not implement this in the Llama API Preview.")
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        LlamaAPI models use prompting for structured output.
+        
+        Returns:
+            False - LlamaAPI uses prompting approach
+        """
+        return False
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for LlamaAPI structured output
+        """
+        return {
+            "approach": "prompting",
+            "supports_multiple_tools": False
+        }

@@ -154,7 +154,7 @@ async def event_loop_cycle(
                 registry = get_global_registry()
                 try:
                     structured_output_tools = registry.get_tool_specs(output_schema)
-                    structured_output_tool_names = {tool.name for tool in structured_output_tools}
+                    structured_output_tool_names = {tool.get("name") for tool in structured_output_tools}
                     logger.debug(f"Registered {len(structured_output_tools)} structured output tools: {structured_output_tool_names}")
                 except Exception as e:
                     logger.error(f"Failed to generate structured output tools: {e}")
@@ -459,18 +459,11 @@ def _extract_structured_output(
 
     # Extract the structured output using the output mode
     try:
-        # Get the expected type for this tool
-        tool_name = structured_output_tool_use.get("name")
-        expected_type = None
-
-        # Find the expected type by matching tool name to output types
-        for output_type in output_schema.types:
-            if output_type.__name__ == tool_name:
-                expected_type = output_type
-                break
-
+        # Use the output type from the schema
+        expected_type = output_schema.output_type
+        
         if not expected_type:
-            logger.warning(f"Could not find expected type for structured output tool: {tool_name}")
+            logger.warning("No output type specified in output schema")
             return None
 
         # Extract the result content

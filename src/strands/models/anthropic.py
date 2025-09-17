@@ -7,7 +7,7 @@ import base64
 import json
 import logging
 import mimetypes
-from typing import Any, AsyncGenerator, Optional, Type, TypedDict, TypeVar, Union, cast
+from typing import Any, AsyncGenerator, Dict, Optional, Type, TypedDict, TypeVar, Union, cast
 
 import anthropic
 from pydantic import BaseModel
@@ -461,3 +461,28 @@ class AnthropicModel(Model):
             raise ValueError("No valid tool use or tool use input was found in the Anthropic response.")
 
         yield {"output": output_model(**output_response)}
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        Anthropic models use function calling for structured output, not native support.
+        
+        Returns:
+            False - Anthropic uses function calling approach
+        """
+        return False
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for Anthropic structured output
+        """
+        return {
+            "approach": "function_calling",
+            "tool_choice": {"type": "any"},
+            "supports_multiple_tools": True
+        }

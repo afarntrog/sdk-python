@@ -7,7 +7,7 @@ import base64
 import json
 import logging
 import mimetypes
-from typing import Any, AsyncGenerator, Optional, Protocol, Type, TypedDict, TypeVar, Union, cast
+from typing import Any, AsyncGenerator, Dict, Optional, Protocol, Type, TypedDict, TypeVar, Union, cast
 
 import openai
 from openai.types.chat.parsed_chat_completion import ParsedChatCompletion
@@ -470,3 +470,28 @@ class OpenAIModel(Model):
             yield {"output": parsed}
         else:
             raise ValueError("No valid tool use or tool use input was found in the OpenAI response.")
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        OpenAI models support native structured output via response_format.
+        
+        Returns:
+            True - OpenAI supports native structured output
+        """
+        return True
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for OpenAI structured output
+        """
+        return {
+            "approach": "native",
+            "response_format": output_type,
+            "supports_multiple_tools": False
+        }

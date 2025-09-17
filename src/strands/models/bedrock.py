@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import warnings
-from typing import Any, AsyncGenerator, Callable, Iterable, Literal, Optional, Type, TypeVar, Union, cast
+from typing import Any, AsyncGenerator, Callable, Dict, Iterable, Literal, Optional, Type, TypeVar, Union, cast
 
 import boto3
 from botocore.config import Config as BotocoreConfig
@@ -818,3 +818,28 @@ class BedrockModel(Model):
             )
 
         return _DEFAULT_BEDROCK_MODEL_ID.format(prefix_inference_map.get(prefix, prefix))
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        Bedrock models use function calling for structured output, not native support.
+        
+        Returns:
+            False - Bedrock uses function calling approach
+        """
+        return False
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for Bedrock structured output
+        """
+        return {
+            "approach": "function_calling",
+            "tool_choice": {"any": {}},
+            "supports_multiple_tools": True
+        }

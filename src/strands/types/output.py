@@ -1,29 +1,30 @@
 """Type definitions for structured output system."""
 
-from typing import Union, Type, TypeVar
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional, Type, Union, Protocol, runtime_checkable
 
-from ..output.base import OutputSchema, OutputMode
+from ..output.base import OutputMode, OutputSchema
 
-# Type variable for generic structured output
-T = TypeVar("T", bound=BaseModel)
 
-# Type alias for output type specifications that can be passed to agents
-OutputTypeSpec = Union[
-    Type[BaseModel],              # Single output type
-    list[Type[BaseModel]],        # Multiple possible output types
-    OutputSchema,                 # Complete output schema with mode
-]
+@runtime_checkable
+class StructuredOutputCapable(Protocol):
+    """Protocol for models that support structured output."""
+    
+    def supports_native_structured_output(self) -> bool:
+        """Check if the model supports native structured output."""
+        ...
+    
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output."""
+        ...
 
-# Type alias for output mode specifications
-OutputModeSpec = Union[
-    OutputMode,                   # Specific output mode instance
-    Type[OutputMode],            # Output mode class (will be instantiated)
-    str,                         # Output mode name (for string-based configuration)
-]
 
-__all__ = [
-    "T",
-    "OutputTypeSpec",
-    "OutputModeSpec",
-]
+# Type aliases for common output configurations
+OutputType = Union[Type, None]
+OutputModeType = Union[OutputMode, str, None]
+OutputSchemaType = Union[OutputSchema, Dict[str, Any], None]
+OutputTypeSpec = Union[Type, List[Type], OutputSchema, None]
+
+# Common output mode names
+OUTPUT_MODE_TOOL = "tool"
+OUTPUT_MODE_NATIVE = "native" 
+OUTPUT_MODE_PROMPTED = "prompted"

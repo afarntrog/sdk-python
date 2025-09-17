@@ -762,3 +762,27 @@ class LlamaCppModel(Model):
         finally:
             # Restore original configuration
             self.config["params"] = original_params
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if this model supports native structured output capabilities.
+        
+        LlamaCpp models use prompting for structured output.
+        
+        Returns:
+            False - LlamaCpp uses prompting approach
+        """
+        return False
+
+    def get_structured_output_config(self, output_type: Type) -> Dict[str, Any]:
+        """Get model-specific configuration for structured output.
+        
+        Args:
+            output_type: The expected output type
+            
+        Returns:
+            Configuration dict for LlamaCpp structured output
+        """
+        return {
+            "approach": "prompting",
+            "supports_multiple_tools": False
+        }

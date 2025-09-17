@@ -1,20 +1,16 @@
-"""Structured output system for Strands SDK.
-
-This module provides a unified approach to structured output that integrates with the main agent loop
-while maintaining backward compatibility. The system defaults to tool-based output for maximum reliability.
-"""
+"""Structured output system for Strands Agents."""
 
 from .base import OutputMode, OutputSchema
 from .modes import ToolOutput, NativeOutput, PromptedOutput
-from .registry import OutputRegistry, get_global_registry, clear_global_cache
+from .registry import OutputRegistry, get_global_registry, convert_type_to_schema
 
 __all__ = [
     "OutputMode",
-    "OutputSchema",
+    "OutputSchema", 
     "ToolOutput",
     "NativeOutput",
     "PromptedOutput",
     "OutputRegistry",
     "get_global_registry",
-    "clear_global_cache",
+    "convert_type_to_schema",
 ]
