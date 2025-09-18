@@ -53,6 +53,7 @@ class ToolExecutor(abc.ABC):
             Validated tool result
         """
         # For structured output tools, ensure the result is properly formatted
+        print("inside _validate_structured_output_result  "*30)
         if result.get("status") == "success":
             logger.debug(f"Validated structured output result for tool: {tool_name}")
         else:
@@ -187,7 +188,7 @@ class ToolExecutor(abc.ABC):
             tool_results.append(after_event.result)
 
         except Exception as e:
-            logger.exception("tool_name=<%s> | failed to process tool", tool_name)
+            logger.exception("tool_name=<%s> | failed to process tool", tool_name) # This is the part where the tool be returned to the LLM with an error message.
             error_result: ToolResult = {
                 "toolUseId": str(tool_use.get("toolUseId")),
                 "status": "error",

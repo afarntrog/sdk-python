@@ -438,7 +438,7 @@ async def _handle_structured_output_execution(
         tool_name = tool_use.get("name", "")
         
         if tool_name in expected_tool_names:
-            # Create a tool result for this structured output tool
+            # Create a tool result for this structured output tool. we are here because the LLM decided to populate the SO tool: `tool_use`
             tool_result: ToolResult = {
                 "toolUseId": tool_use["toolUseId"],
                 "content": [{"text": f"Successfully extracted {tool_name} data"}],
@@ -540,6 +540,7 @@ async def _handle_tool_execution(
                 yield event
             return
 
+    # TODO over here we take the `tool_uses` from earlier and then actually execute them. We don't execute the structured output tool but I'm thinking we should put it in a tool so that the LLM can retry if it needs to. Example "tool_uses": `[{'toolUseId': 'tooluse_PPkLaDZSR3CtHJy6xtVz5w', 'name': 'get_user_location', 'input': {}}]`
     tool_events = agent.tool_executor._execute(
         agent, tool_uses, tool_results, cycle_trace, cycle_span, invocation_state
     )
