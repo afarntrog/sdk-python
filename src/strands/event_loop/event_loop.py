@@ -23,6 +23,7 @@ from ..experimental.hooks import (
 from ..hooks import (
     MessageAddedEvent,
 )
+from ..output.modes import NativeOutput
 from ..telemetry.metrics import Trace
 from ..telemetry.tracer import get_tracer
 from ..tools._validator import validate_and_prepare_tools
@@ -53,6 +54,7 @@ from .streaming import stream_messages
 if TYPE_CHECKING:
     from ..agent.agent import Agent
     from ..output.base import OutputSchema
+
 
 if TYPE_CHECKING:
     from ..agent import Agent
@@ -300,26 +302,57 @@ async def event_loop_cycle(
         raise EventLoopException(e, invocation_state["request_state"]) from e
 
     # Force structured output tool call if LLM didn't use it automatically
-    print(50*"last_message_was_not_tool_use_so_here_this_will_happen_alot_but_not_a_problem ")
     if output_schema and stop_reason != "tool_use":
+        # Check if we're using NativeOutput mode
+        if isinstance(output_schema.mode, NativeOutput):
+            logger.debug("LLM didn't call structured output tool, trying native structured output")
+
+            # Use model's native structured output instead of forcing tools
+            try:
+                events = agent.model.structured_output(
+                    output_schema.type,
+                    agent.messages,
+                    system_prompt=agent.system_prompt
+                )
+
+                # Process events from native structured output
+                async for event in events:
+                    if "output" in event:
+                        # Emit structured output event
+                        yield StructuredOutputEvent(structured_output=event["output"])
+
+                        # Emit stop event with structured output to properly terminate
+                        yield EventLoopStopEvent(
+                            stop_reason=stop_reason,  # Use the actual stop reason from the original model call
+                            message=message,
+                            metrics=agent.event_loop_metrics,
+                            request_state=invocation_state["request_state"],
+                            structured_output=event["output"]
+                        )
+                        return
+
+            except Exception as e:
+                logger.warning(f"Native structured output failed: {e}, falling back to tool forcing")
+                # Fall through to tool forcing logic below
+
         logger.debug("LLM didn't call structured output tool, forcing invocation via recursive event loop")
-        
+
         # Add forcing message to conversation
         # TODO I don't think we need this. I think we can just pass in the data with the tool with toolChoice
         # force_message: Message = {
-        #     "role": "user", 
+        #     "role": "user",
         #     "content": [{"text": f"Use the {output_schema.type.__name__} tool."}]
         # }
         # agent.messages.append(force_message)
         # agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=force_message))
 
         # TODO testing only; remove the tool_use message (this can never happen in prod because we check in the begining if)
-        
+
         # Create new invocation state for forced call with tool choice
         forced_invocation_state = invocation_state.copy()
         forced_invocation_state["tool_choice"] = {"tool": {"name": output_schema.type.__name__}}
         forced_invocation_state["structured_output_only"] = True
-        
+
         # Recursively call event loop with constraints
         events = recurse_event_loop(agent=agent, invocation_state=forced_invocation_state)
         async for typed_event in events:
