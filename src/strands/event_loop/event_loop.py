@@ -300,7 +300,7 @@ async def event_loop_cycle(
         raise EventLoopException(e, invocation_state["request_state"]) from e
 
     # Force structured output tool call if LLM didn't use it automatically
-    print(100*"7777")
+    print(50*"last_message_was_not_tool_use_so_here_this_will_happen_alot_but_not_a_problem ")
     if output_schema and stop_reason != "tool_use":
         logger.debug("LLM didn't call structured output tool, forcing invocation via recursive event loop")
         
