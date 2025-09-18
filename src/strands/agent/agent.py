@@ -27,7 +27,7 @@ from typing import (
     Union,
     cast,
 )
-
+from typing_extensions import deprecated
 from opentelemetry import trace as trace_api
 from pydantic import BaseModel
 
@@ -505,6 +505,12 @@ class Agent:
 
         return cast(AgentResult, event["result"])
 
+    @deprecated(
+        'Agent.structured_output method is deprecated.'
+        ' You should pass in `output_type` directly into the agent invocation.'
+        ' see the <LINK> for more details',
+        category=None,
+    )
     def structured_output(self, output_model: Type[T], prompt: AgentInput = None) -> T:
         """This method allows you to get structured output from the agent.
 
@@ -534,6 +540,12 @@ class Agent:
             future = executor.submit(execute)
             return future.result()
 
+    @deprecated(
+        'Agent.structured_output_async method is deprecated.'
+        ' You should pass in `output_type` directly into the agent invocation.'
+        ' see the <LINK> for more details',
+        category=None,
+    )
     async def structured_output_async(self, output_model: Type[T], prompt: AgentInput = None) -> T:
         """This method allows you to get structured output from the agent.
 
@@ -639,7 +651,7 @@ class Agent:
         """
         callback_handler = kwargs.get("callback_handler", self.callback_handler)
 
-        # Resolve output schema (runtime override or agent default)
+        # Resolve output schema (runtime override or agent default) TODO we should allow for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `output_type` on the `output_mode`
         if output_schema is None:
             output_schema = self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
 
