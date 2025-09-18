@@ -8,6 +8,7 @@ from .base import OutputMode
 if TYPE_CHECKING:
     from strands.models.model import Model
     from strands.tools.tool_spec import ToolSpec
+    from strands.tools.structured_output_tool import StructuredOutputTool
 
 
 class ToolOutput(OutputMode):
@@ -21,6 +22,18 @@ class ToolOutput(OutputMode):
         """Convert Pydantic model to tool specifications."""
         from strands.tools.structured_output import convert_pydantic_to_tool_spec
         return [convert_pydantic_to_tool_spec(output_type)]
+
+    def get_tool_instances(self, output_type: Type[BaseModel]) -> list["StructuredOutputTool"]:
+        """Create actual tool instances for structured output.
+        
+        Args:
+            output_type: The Pydantic model class to create tools for.
+            
+        Returns:
+            List containing a single StructuredOutputTool instance.
+        """
+        from strands.tools.structured_output_tool import StructuredOutputTool
+        return [StructuredOutputTool(output_type)]
 
     def extract_result(self, model_response: Any) -> Any:
         """Extract result from tool call response."""
