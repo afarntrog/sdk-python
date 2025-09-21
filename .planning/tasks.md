@@ -7,7 +7,7 @@ This document breaks down the structured output implementation into discrete, ac
 ## Phase 1: Core Infrastructure ✅
 
 ### Task 1.1: Create Output Mode Base Classes ✅
-**Prompt:** Create the base output mode system in `src/strands/output/base.py`. Implement the abstract `OutputMode` class with methods for `get_tool_specs()`, `extract_result()`, and `is_supported_by_model()`. Also implement the `OutputSchema` container class that holds output types (Pydantic models only), mode, name, and description, with a default to `ToolOutput()`.
+**Prompt:** Create the base output mode system in `src/strands/output/base.py`. Implement the abstract `OutputMode` class with methods for `get_tool_specs()`, `extract_result()`, and `is_supported_by_model()`. Also implement the `OutputSchema` container class that holds output types (Pydantic models only), mode, name, and description, with a default to `ToolMode()`.
 
 **Files to create/modify:**
 - `src/strands/output/__init__.py` ✅
@@ -17,18 +17,18 @@ This document breaks down the structured output implementation into discrete, ac
 - Abstract `OutputMode` class with required methods ✅
 - `OutputSchema` class with proper initialization (Pydantic models only) ✅
 - Type hints and docstrings for all public APIs ✅
-- Default to `ToolOutput()` when no mode specified ✅
+- Default to `ToolMode()` when no mode specified ✅
 
 ### Task 1.2: Implement Output Mode Implementations ✅
-**Prompt:** Create the concrete output mode implementations in `src/strands/output/modes.py`. Implement `ToolOutput` (default), `NativeOutput`, and `PromptedOutput` classes. Each should implement the abstract methods from `OutputMode` and include model support detection. `ToolOutput` should always return `True` for `is_supported_by_model()`.
+**Prompt:** Create the concrete output mode implementations in `src/strands/output/modes.py`. Implement `ToolMode` (default), `NativeMode`, and `PromptMode` classes. Each should implement the abstract methods from `OutputMode` and include model support detection. `ToolMode` should always return `True` for `is_supported_by_model()`.
 
 **Files to create/modify:**
 - `src/strands/output/modes.py` ✅
 
 **Acceptance criteria:**
-- `ToolOutput` class converts Pydantic models to tool specs ✅
-- `NativeOutput` class returns empty tool specs and checks model support ✅
-- `PromptedOutput` class with customizable template ✅
+- `ToolMode` class converts Pydantic models to tool specs ✅
+- `NativeMode` class returns empty tool specs and checks model support ✅
+- `PromptMode` class with customizable template ✅
 - All classes implement `is_supported_by_model()` correctly ✅
 
 ### Task 1.3: Create Output Registry System ✅
@@ -89,7 +89,7 @@ This document breaks down the structured output implementation into discrete, ac
 ## Phase 3: Agent Interface Enhancement ✅
 
 ### Task 3.1: Enhance Agent Constructor ✅
-**Prompt:** Modify the `Agent` class constructor in `src/strands/agent/agent.py` to accept `output_type` (Pydantic models only) and `output_mode` parameters. Implement the `_resolve_output_schema()` method that defaults to `ToolOutput()` and includes model support validation with automatic fallback.
+**Prompt:** Modify the `Agent` class constructor in `src/strands/agent/agent.py` to accept `output_type` (Pydantic models only) and `output_mode` parameters. Implement the `_resolve_output_schema()` method that defaults to `ToolMode()` and includes model support validation with automatic fallback.
 
 **Files to create/modify:**
 - `src/strands/agent/agent.py` ✅
@@ -97,7 +97,7 @@ This document breaks down the structured output implementation into discrete, ac
 **Acceptance criteria:**
 - Constructor accepts `output_type` (Pydantic models only) and `output_mode` parameters ✅
 - `_resolve_output_schema()` method implemented ✅
-- Default to `ToolOutput()` when no mode specified ✅
+- Default to `ToolMode()` when no mode specified ✅
 - Model support validation with fallback logic ✅
 - Proper logging for fallback scenarios ✅
 
@@ -115,7 +115,7 @@ This document breaks down the structured output implementation into discrete, ac
 - Backward compatibility for existing calls ✅
 
 ### Task 3.3: Implement Output Schema Resolution Logic ✅
-**Prompt:** Implement the complete output schema resolution logic in the `Agent` class. This includes handling runtime overrides, default schema application, model compatibility checking, and automatic fallback from unsupported modes to `ToolOutput()`.
+**Prompt:** Implement the complete output schema resolution logic in the `Agent` class. This includes handling runtime overrides, default schema application, model compatibility checking, and automatic fallback from unsupported modes to `ToolMode()`.
 
 **Files to create/modify:**
 - `src/strands/agent/agent.py` ✅
@@ -124,7 +124,7 @@ This document breaks down the structured output implementation into discrete, ac
 - Runtime output type override support ✅
 - Agent-level default schema application ✅
 - Model compatibility validation ✅
-- Automatic fallback to `ToolOutput()` ✅
+- Automatic fallback to `ToolMode()` ✅
 - Comprehensive error handling and logging ✅
 
 ## Phase 4: Event Loop Integration ✅

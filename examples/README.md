@@ -48,9 +48,9 @@ user = result.get_structured_output(UserProfile)
 ## Key Features Demonstrated
 
 ### ✅ Output Modes
-- **ToolOutput** (default) - Uses function calling, works with all models
-- **NativeOutput** - Uses model's native structured output when available
-- **PromptedOutput** - Uses custom prompt templates
+- **ToolMode** (default) - Uses function calling, works with all models
+- **NativeMode** - Uses model's native structured output when available
+- **PromptMode** - Uses custom prompt templates
 
 ### ✅ Model Provider Support
 - **OpenAI** - Native structured output support
@@ -106,7 +106,7 @@ agent = Agent(
 agent = Agent(
     model=OpenAIModel(model_id="gpt-4"),
     output_type=UserProfile,
-    output_mode=NativeOutput()
+    output_mode=NativeMode()
 )
 ```
 
@@ -188,7 +188,7 @@ except Exception as e:
 
 ## Performance Tips
 
-1. **Use NativeOutput when available** - Faster for supported models
+1. **Use NativeMode when available** - Faster for supported models
 2. **Set default output types** - Avoids repeated parameter passing
 3. **Cache agents** - Reuse agents for multiple calls
 4. **Handle errors gracefully** - Always wrap in try/catch blocks

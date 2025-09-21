@@ -59,9 +59,9 @@ The current structured output flow:
    ```
 
 4. **Various Output Modes**:
-   - `ToolOutput`: Function calling for structured output
-   - `NativeOutput`: Native model structured output capabilities
-   - `PromptedOutput`: Prompting-based approach
+   - `ToolMode`: Function calling for structured output
+   - `NativeMode`: Native model structured output capabilities
+   - `PromptMode`: Prompting-based approach
    - `TextOutput`: Post-processing of text output
    - `StructuredDict`: JSON schema validation
 
@@ -114,14 +114,14 @@ class OutputSchema:
         description: Optional[str] = None
     ):
         self.types = types if isinstance(types, list) else [types]
-        self.mode = mode or ToolOutput()  # Default to tool-based approach
+        self.mode = mode or ToolMode()  # Default to tool-based approach
         self.name = name
         self.description = description
 ```
 
 #### Output Mode Implementations (`modes.py`)
 ```python
-class ToolOutput(OutputMode):
+class ToolMode(OutputMode):
     """Use function calling for structured output (DEFAULT)
 
     This is the most reliable approach across all model providers and ensures
@@ -135,11 +135,11 @@ class ToolOutput(OutputMode):
         """Tool-based output is supported by all models that support function calling"""
         return True  # All our models support function calling
 
-class NativeOutput(OutputMode):
+class NativeMode(OutputMode):
     """Use model's native structured output capabilities
 
     Only use when explicitly requested and supported by the model.
-    Falls back to ToolOutput if not supported.
+    Falls back to ToolMode if not supported.
     """
 
     def get_tool_specs(self, output_types: list[Type[BaseModel]]) -> list[ToolSpec]:
@@ -150,7 +150,7 @@ class NativeOutput(OutputMode):
         """Check if model supports native structured output"""
         return model.supports_native_structured_output()
 
-class PromptedOutput(OutputMode):
+class PromptMode(OutputMode):
     """Use prompting to guide output format
 
     Only use when explicitly requested. Less reliable than tool-based approach
@@ -235,19 +235,19 @@ class Agent:
         if not output_type:
             return None
 
-        # Default to ToolOutput if no mode specified
-        resolved_mode = output_mode or ToolOutput()
+        # Default to ToolMode if no mode specified
+        resolved_mode = output_mode or ToolMode()
 
         # Validate mode is supported by current model
         if not resolved_mode.is_supported_by_model(self.model):
-            if isinstance(resolved_mode, NativeOutput):
+            if isinstance(resolved_mode, NativeMode):
                 # Fallback to tool-based approach for native output
                 logger.warning(
                     f"Model {self.model.__class__.__name__} does not support native structured output. "
                     "Falling back to tool-based approach."
                 )
-                resolved_mode = ToolOutput()
-            elif isinstance(resolved_mode, PromptedOutput):
+                resolved_mode = ToolMode()
+            elif isinstance(resolved_mode, PromptMode):
                 # This shouldn't happen as all models support prompting
                 raise ValueError(f"Model {self.model.__class__.__name__} does not support prompting")
 
@@ -326,23 +326,23 @@ class Model(abc.ABC):
 All providers default to tool-based approach unless explicitly overridden:
 
 - **Bedrock**:
-  - Default: ToolOutput (function calling)
-  - Native: Not supported, falls back to ToolOutput
+  - Default: ToolMode (function calling)
+  - Native: Not supported, falls back to ToolMode
   - Prompted: Available when explicitly requested
 
 - **OpenAI**:
-  - Default: ToolOutput (function calling)
+  - Default: ToolMode (function calling)
   - Native: Available when explicitly requested (structured_outputs=True)
   - Prompted: Available when explicitly requested
 
 - **Anthropic**:
-  - Default: ToolOutput (function calling)
-  - Native: Not supported, falls back to ToolOutput
+  - Default: ToolMode (function calling)
+  - Native: Not supported, falls back to ToolMode
   - Prompted: Available when explicitly requested
 
 - **Others (Ollama, LiteLLM, etc.)**:
-  - Default: ToolOutput (function calling)
-  - Native: Model-dependent, falls back to ToolOutput if not supported
+  - Default: ToolMode (function calling)
+  - Native: Model-dependent, falls back to ToolMode if not supported
   - Prompted: Available when explicitly requested
 
 ### 6. Backward Compatibility
@@ -369,23 +369,23 @@ def structured_output(self, output_model: Type[T], prompt: AgentInput = None) ->
 
 #### Type-Safe Patterns
 ```python
-# Agent-level output type (uses ToolOutput by default)
+# Agent-level output type (uses ToolMode by default)
 agent = Agent(model, output_type=UserProfile)  # Uses function calling
 result = agent("Extract user info from: John Doe, age 30")  # Returns AgentResult
 user = result.get_structured_output(UserProfile)  # Extract UserProfile
 
-# Runtime output type specification (uses ToolOutput by default)
+# Runtime output type specification (uses ToolMode by default)
 result = agent("Summarize this text", output_type=Summary)  # Uses function calling
 summary = result.get_structured_output(Summary)  # Extract Summary
 
 # Explicit output mode specification
-precise_agent = Agent(model, output_type=Data, output_mode=NativeOutput())  # Uses native if supported
-fast_agent = Agent(model, output_type=Data, output_mode=PromptedOutput())   # Uses prompting
+precise_agent = Agent(model, output_type=Data, output_mode=NativeMode())  # Uses native if supported
+fast_agent = Agent(model, output_type=Data, output_mode=PromptMode())   # Uses prompting
 
 # Runtime mode override
-result = agent("Extract data", output_type=Data, output_mode=NativeOutput())  # Uses native if supported
+result = agent("Extract data", output_type=Data, output_mode=NativeMode())  # Uses native if supported
 
-# Multiple output types (still uses ToolOutput by default)
+# Multiple output types (still uses ToolMode by default)
 agent = Agent(model, output_type=[Person, Company])  # Creates multiple function tools
 result = agent("What is Apple Inc?")  # Returns AgentResult
 entity = result.structured_output  # Returns Person | Company instance
@@ -397,8 +397,8 @@ text = str(result)  # Get text response
 
 # Fallback behavior for unsupported modes
 try:
-    # If model doesn't support native, automatically falls back to ToolOutput
-    result = agent("Extract", output_type=Data, output_mode=NativeOutput())
+    # If model doesn't support native, automatically falls back to ToolMode
+    result = agent("Extract", output_type=Data, output_mode=NativeMode())
 except ValueError:
     # Only raises if something is fundamentally wrong
     pass
@@ -444,7 +444,7 @@ except ValueError:
    - Update all model providers for structured output support
 
 2. **Provider-Specific Implementation**
-   - All providers: Default to ToolOutput (function calling)
+   - All providers: Default to ToolMode (function calling)
    - OpenAI: Add native structured output support when explicitly requested
    - Bedrock: Enhanced function calling with better schema handling
    - Anthropic: Enhanced function calling support
@@ -507,7 +507,7 @@ except ValueError:
 # Old approach
 user_data = agent.structured_output(UserModel, "Extract user info")
 
-# New approach (uses ToolOutput by default - most reliable)
+# New approach (uses ToolMode by default - most reliable)
 result = agent("Extract user info", output_type=UserModel)
 user_data = result.get_structured_output(UserModel)
 
@@ -521,19 +521,19 @@ user_data = result.structured_output
 text_result = agent("Generate summary")
 structured_result = agent.structured_output(Summary, "Generate summary")
 
-# New: Unified interface (uses ToolOutput by default)
+# New: Unified interface (uses ToolMode by default)
 text_result = agent("Generate summary")
 structured_result = agent("Generate summary", output_type=Summary)
 summary = structured_result.get_structured_output(Summary)
 
-# Or set default output type (uses ToolOutput by default)
+# Or set default output type (uses ToolMode by default)
 summary_agent = Agent(model, output_type=Summary)
 result = summary_agent("Generate summary")
 summary = result.get_structured_output(Summary)
 
 # Explicit mode selection only when needed
-result = agent("Extract", output_type=Data, output_mode=NativeOutput())
-# Falls back to ToolOutput if model doesn't support native
+result = agent("Extract", output_type=Data, output_mode=NativeMode())
+# Falls back to ToolMode if model doesn't support native
 ```
 
 ## Success Metrics

@@ -4,7 +4,7 @@ Simple test to validate the structured output system components.
 """
 
 from pydantic import BaseModel, Field
-from strands import Agent, ToolOutput, NativeOutput, OutputSchema
+from strands import Agent, ToolMode, NativeMode, OutputSchema
 
 
 class Person(BaseModel):
@@ -18,11 +18,11 @@ def test_output_modes():
     """Test output mode creation"""
     print("=== Testing Output Modes ===")
     
-    tool_output = ToolOutput()
-    native_output = NativeOutput()
+    tool_output = ToolMode()
+    native_output = NativeMode()
     
-    print(f"✅ ToolOutput created: {type(tool_output).__name__}")
-    print(f"✅ NativeOutput created: {type(native_output).__name__}")
+    print(f"✅ ToolMode created: {type(tool_output).__name__}")
+    print(f"✅ NativeMode created: {type(native_output).__name__}")
     print()
 
 
@@ -32,7 +32,7 @@ def test_output_schema():
     
     schema = OutputSchema(
         types=[Person],
-        mode=ToolOutput(),
+        mode=ToolMode(),
         name="person_output",
         description="Extract person information"
     )
@@ -61,7 +61,7 @@ def test_agent_creation():
     print(f"✅ Agent with default output type: {agent1.default_output_schema is not None}")
     
     # Test agent with output mode
-    agent2 = Agent(output_type=Person, output_mode=NativeOutput())
+    agent2 = Agent(output_type=Person, output_mode=NativeMode())
     print(f"✅ Agent with output mode: {type(agent2.default_output_schema.mode).__name__}")
     
     # Test regular agent
@@ -87,7 +87,7 @@ def test_model_capabilities():
     print(f"✅ OpenAI native support: {openai_model.supports_native_structured_output()}")
     
     # Test configuration generation
-    schema = OutputSchema(types=[Person], mode=ToolOutput())
+    schema = OutputSchema(types=[Person], mode=ToolMode())
     bedrock_config = bedrock.get_structured_output_config(schema)
     openai_config = openai_model.get_structured_output_config(schema)
     
@@ -134,7 +134,7 @@ def test_imports():
     print("=== Testing Imports ===")
     
     try:
-        from strands import Agent, ToolOutput, NativeOutput, PromptedOutput, OutputSchema
+        from strands import Agent, ToolMode, NativeMode, PromptMode, OutputSchema
         print("✅ Core imports work")
         
         from strands import tool, ToolContext

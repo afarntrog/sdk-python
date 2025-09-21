@@ -4,7 +4,7 @@ from typing import Type, Union, Optional, Dict, Any
 from pydantic import BaseModel
 
 from .base import OutputMode, OutputSchema
-from .modes import ToolOutput
+from .modes import ToolMode
 
 
 class OutputRegistry:
@@ -23,7 +23,7 @@ class OutputRegistry:
         
         Args:
             output_type: Output type specification
-            output_mode: Output mode (defaults to ToolOutput if not specified)
+            output_mode: Output mode (defaults to ToolMode if not specified)
             
         Returns:
             Resolved OutputSchema or None if no output type specified
@@ -34,8 +34,8 @@ class OutputRegistry:
         if isinstance(output_type, OutputSchema):
             return output_type
 
-        # Default to ToolOutput if no mode specified
-        resolved_mode = output_mode or ToolOutput()
+        # Default to ToolMode if no mode specified
+        resolved_mode = output_mode or ToolMode()
 
         return OutputSchema(output_type, resolved_mode)
 

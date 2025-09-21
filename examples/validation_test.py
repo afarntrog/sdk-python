@@ -5,7 +5,7 @@ This test validates all components without relying on external model APIs.
 """
 
 from pydantic import BaseModel, Field
-from strands import Agent, ToolOutput, NativeOutput, OutputSchema
+from strands import Agent, ToolMode, NativeMode, OutputSchema
 
 
 class Person(BaseModel):
@@ -29,10 +29,10 @@ def test_system_components():
     
     # Test 1: Output modes
     print("1. Testing output modes...")
-    tool_output = ToolOutput()
-    native_output = NativeOutput()
-    print(f"   ✅ ToolOutput: {type(tool_output).__name__}")
-    print(f"   ✅ NativeOutput: {type(native_output).__name__}")
+    tool_output = ToolMode()
+    native_output = NativeMode()
+    print(f"   ✅ ToolMode: {type(tool_output).__name__}")
+    print(f"   ✅ NativeMode: {type(native_output).__name__}")
     
     # Test 2: Output schema
     print("2. Testing output schema...")
@@ -52,7 +52,7 @@ def test_system_components():
     # Test 4: Agent creation
     print("4. Testing agent creation...")
     agent1 = Agent(output_type=Person)
-    agent2 = Agent(output_type=Person, output_mode=NativeOutput())
+    agent2 = Agent(output_type=Person, output_mode=NativeMode())
     print(f"   ✅ Agent with output_type: {agent1.default_output_schema is not None}")
     print(f"   ✅ Agent with output_mode: {type(agent2.default_output_schema.mode).__name__}")
     
@@ -126,7 +126,7 @@ def test_system_components():
     print("🎉 ALL SYSTEM COMPONENTS WORKING CORRECTLY!")
     print()
     print("📋 Validation Summary:")
-    print("   ✅ Output modes (ToolOutput, NativeOutput)")
+    print("   ✅ Output modes (ToolMode, NativeMode)")
     print("   ✅ Output schema creation and validation")
     print("   ✅ Tool specification generation")
     print("   ✅ Agent creation with structured output")

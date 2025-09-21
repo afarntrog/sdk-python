@@ -8,7 +8,7 @@ import asyncio
 import warnings
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from strands import Agent, ToolOutput, NativeOutput, PromptedOutput, OutputSchema
+from strands import Agent, ToolMode, NativeMode, PromptMode, OutputSchema
 
 
 # Example Models
@@ -99,9 +99,9 @@ def example_3_output_modes():
     
     # Test different output modes
     modes = [
-        ("ToolOutput (default)", ToolOutput()),
-        ("NativeOutput", NativeOutput()),
-        ("PromptedOutput", PromptedOutput(template="Extract info: {prompt}\nFormat as JSON:")),
+        ("ToolMode (default)", ToolMode()),
+        ("NativeMode", NativeMode()),
+        ("PromptMode", PromptMode(template="Extract info: {prompt}\nFormat as JSON:")),
     ]
     
     for mode_name, mode in modes:
@@ -175,7 +175,7 @@ def example_6_output_schema():
     # Create custom output schema
     schema = OutputSchema(
         types=[Person, Task],
-        mode=ToolOutput(),
+        mode=ToolMode(),
         name="multi_type_output",
         description="Can output either Person or Task"
     )
@@ -206,7 +206,7 @@ def example_7_model_capabilities():
         print(f"✓ Bedrock native support: {bedrock_model.supports_native_structured_output()}")
         
         # Test configuration generation
-        schema = OutputSchema(types=[Person], mode=ToolOutput())
+        schema = OutputSchema(types=[Person], mode=ToolMode())
         config = bedrock_model.get_structured_output_config(schema)
         print(f"  Bedrock config: {config}")
         

@@ -2,7 +2,7 @@
 
 from . import agent, models, output, telemetry, types
 from .agent.agent import Agent
-from .output import NativeOutput, OutputSchema, PromptedOutput, ToolOutput
+from .output import NativeMode, OutputSchema, PromptMode, ToolMode
 from .tools.decorator import tool
 from .types.tools import ToolContext
 
@@ -11,12 +11,12 @@ __all__ = [
     "agent", 
     "models", 
     "output",
-    "NativeOutput",
+    "NativeMode",
     "OutputSchema", 
-    "PromptedOutput",
+    "PromptMode",
     "tool", 
     "ToolContext",
-    "ToolOutput",
+    "ToolMode",
     "types", 
     "telemetry",
 ]

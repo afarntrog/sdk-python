@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from strands.tools.structured_output_tool import StructuredOutputTool
 
 
-class ToolOutput(OutputMode):
+class ToolMode(OutputMode):
     """Use function calling for structured output (DEFAULT).
     
     This is the most reliable approach across all model providers and ensures
@@ -45,11 +45,11 @@ class ToolOutput(OutputMode):
         return True  # All our models support function calling
 
 
-class NativeOutput(OutputMode):
+class NativeMode(OutputMode):
     """Use model's native structured output capabilities.
     
     Only use when explicitly requested and supported by the model.
-    Falls back to ToolOutput if not supported.
+    Falls back to ToolMode if not supported.
     """
 
     def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
@@ -66,7 +66,7 @@ class NativeOutput(OutputMode):
         return model.supports_native_structured_output()
 
 
-class PromptedOutput(OutputMode):
+class PromptMode(OutputMode):
     """Use prompting to guide output format.
     
     Only use when explicitly requested. Less reliable than tool-based approach

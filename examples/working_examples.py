@@ -7,7 +7,7 @@ These examples actually work without requiring external API credentials.
 import json
 from typing import Any, AsyncGenerator, AsyncIterable, Dict, List, Optional, Type, Union
 from pydantic import BaseModel, Field
-from strands import Agent, ToolOutput, NativeOutput, OutputSchema
+from strands import Agent, ToolMode, NativeMode, OutputSchema
 from strands.models.model import Model
 from strands.types.content import Messages
 from strands.types.streaming import StreamEvent
@@ -295,8 +295,8 @@ def working_example_3():
     
     # Test different output modes
     modes = [
-        ("ToolOutput", ToolOutput()),
-        ("NativeOutput", NativeOutput()),
+        ("ToolMode", ToolMode()),
+        ("NativeMode", NativeMode()),
     ]
     
     for mode_name, mode in modes:
@@ -318,7 +318,7 @@ def working_example_4():
     print(f"✅ Mock model supports native structured output: {mock_model.supports_native_structured_output()}")
     
     # Test configuration
-    schema = OutputSchema(types=[Person], mode=ToolOutput())
+    schema = OutputSchema(types=[Person], mode=ToolMode())
     config = mock_model.get_structured_output_config(schema)
     print(f"✅ Mock model config: {config}")
     print()
@@ -401,7 +401,7 @@ def working_example_8():
     # Create schema
     schema = OutputSchema(
         types=[Person, Task],
-        mode=ToolOutput(),
+        mode=ToolMode(),
         name="multi_output",
         description="Can output Person or Task"
     )

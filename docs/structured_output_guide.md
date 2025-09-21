@@ -26,20 +26,20 @@ print(f"Name: {user.name}, Age: {user.age}")
 
 The system supports three output modes:
 
-1. **ToolOutput** (default) - Uses function calling for maximum compatibility
-2. **NativeOutput** - Uses model's native structured output when available
-3. **PromptedOutput** - Uses prompt engineering with custom templates
+1. **ToolMode** (default) - Uses function calling for maximum compatibility
+2. **NativeMode** - Uses model's native structured output when available
+3. **PromptMode** - Uses prompt engineering with custom templates
 
 ### Output Schema
 
 The `OutputSchema` class defines what structured output you want:
 
 ```python
-from strands import OutputSchema, ToolOutput
+from strands import OutputSchema, ToolMode
 
 schema = OutputSchema(
     types=[UserProfile],
-    mode=ToolOutput(),
+    mode=ToolMode(),
     name="user_profile_output",
     description="Extract user profile information"
 )
@@ -85,14 +85,14 @@ result2 = agent("Create a project", output_type=Project)
 ### 4. Custom Output Modes
 
 ```python
-from strands import NativeOutput, PromptedOutput
+from strands import NativeMode, PromptMode
 
 # Use native structured output when available
-agent = Agent(output_type=UserProfile, output_mode=NativeOutput())
+agent = Agent(output_type=UserProfile, output_mode=NativeMode())
 
 # Use custom prompt template
 template = "Extract the following information and format as JSON: {prompt}"
-agent = Agent(output_type=UserProfile, output_mode=PromptedOutput(template=template))
+agent = Agent(output_type=UserProfile, output_mode=PromptMode(template=template))
 ```
 
 ### 5. Model Provider Capabilities
@@ -102,11 +102,11 @@ from strands.models import OpenAIModel, BedrockModel
 
 # OpenAI supports native structured output
 openai_model = OpenAIModel(model_id="gpt-4")
-agent = Agent(model=openai_model, output_type=UserProfile, output_mode=NativeOutput())
+agent = Agent(model=openai_model, output_type=UserProfile, output_mode=NativeMode())
 
 # Bedrock uses function calling
 bedrock_model = BedrockModel(model_id="anthropic.claude-3-sonnet-20240229-v1:0")
-agent = Agent(model=bedrock_model, output_type=UserProfile)  # Automatically uses ToolOutput
+agent = Agent(model=bedrock_model, output_type=UserProfile)  # Automatically uses ToolMode
 ```
 
 ## Advanced Features
@@ -116,10 +116,10 @@ agent = Agent(model=bedrock_model, output_type=UserProfile)  # Automatically use
 The system automatically falls back to compatible modes:
 
 ```python
-# If NativeOutput isn't supported, automatically falls back to ToolOutput
+# If NativeMode isn't supported, automatically falls back to ToolMode
 agent = Agent(
     output_type=UserProfile, 
-    output_mode=NativeOutput()  # Will fallback to ToolOutput if not supported
+    output_mode=NativeMode()  # Will fallback to ToolMode if not supported
 )
 ```
 
@@ -183,20 +183,20 @@ except ValueError as e:
 
 1. **Use descriptive model docstrings** - They help the AI understand what to extract
 2. **Provide clear field descriptions** - Use Pydantic field descriptions
-3. **Start with ToolOutput mode** - Most compatible across all models
-4. **Use NativeOutput for supported models** - Better performance when available
+3. **Start with ToolMode mode** - Most compatible across all models
+4. **Use NativeMode for supported models** - Better performance when available
 5. **Handle validation errors** - Always wrap in try/catch blocks
 
 ## Model Provider Support
 
 | Provider | Native Support | Recommended Mode |
 |----------|----------------|------------------|
-| OpenAI | ✅ Yes | NativeOutput |
-| Anthropic | ❌ No | ToolOutput |
-| Bedrock | ❌ No | ToolOutput |
-| Ollama | ✅ Yes | NativeOutput |
-| LlamaCpp | ✅ Yes | NativeOutput |
-| Others | ❌ No | ToolOutput |
+| OpenAI | ✅ Yes | NativeMode |
+| Anthropic | ❌ No | ToolMode |
+| Bedrock | ❌ No | ToolMode |
+| Ollama | ✅ Yes | NativeMode |
+| LlamaCpp | ✅ Yes | NativeMode |
+| Others | ❌ No | ToolMode |
 
 ## Migration Guide
 

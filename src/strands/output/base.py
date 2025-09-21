@@ -63,14 +63,14 @@ class OutputSchema:
         
         Args:
             type: Pydantic model type for structured output
-            mode: Output mode to use (defaults to ToolOutput)
+            mode: Output mode to use (defaults to ToolMode)
             name: Optional name for the output schema
             description: Optional description of the output schema
         """
         self.type = type
         if mode is None:
-            from .modes import ToolOutput
-            mode = ToolOutput()
+            from .modes import ToolMode
+            mode = ToolMode()
         self.mode = mode
         self.name = name
         self.description = description

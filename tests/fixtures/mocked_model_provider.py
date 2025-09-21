@@ -1,5 +1,5 @@
 import json
-from typing import Any, AsyncGenerator, Iterable, Optional, Type, TypedDict, TypeVar, Union
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterable, Optional, Type, TypedDict, TypeVar, Union
 
 from pydantic import BaseModel
 
@@ -8,6 +8,9 @@ from strands.types.content import Message, Messages
 from strands.types.event_loop import StopReason
 from strands.types.streaming import StreamEvent
 from strands.types.tools import ToolSpec
+
+if TYPE_CHECKING:
+    from strands.output.base import OutputSchema
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -53,7 +56,12 @@ class MockedModelProvider(Model):
         pass
 
     async def stream(
-        self, messages: Messages, tool_specs: Optional[list[ToolSpec]] = None, system_prompt: Optional[str] = None
+        self, 
+        messages: Messages, 
+        tool_specs: Optional[list[ToolSpec]] = None, 
+        system_prompt: Optional[str] = None,
+        tool_choice: Optional[Any] = None,
+        **kwargs: Any,
     ) -> AsyncGenerator[Any, None]:
         events = self.map_agent_message_to_events(self.agent_responses[self.index])
         for event in events:
@@ -98,3 +106,11 @@ class MockedModelProvider(Model):
                     yield {"contentBlockStop": {}}
 
         yield {"messageStop": {"stopReason": stop_reason}}
+
+    def supports_native_structured_output(self) -> bool:
+        """Check if model supports native structured output."""
+        return False
+
+    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
+        """Get model-specific structured output configuration."""
+        return {}

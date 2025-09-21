@@ -69,13 +69,13 @@ user = result.get_structured_output(UserProfile)
 
 **New Feature:**
 ```python
-from strands import NativeOutput, ToolOutput
+from strands import NativeMode, ToolMode
 
 # Use native structured output when available
-agent = Agent(output_type=UserProfile, output_mode=NativeOutput())
+agent = Agent(output_type=UserProfile, output_mode=NativeMode())
 
 # Or explicitly use tool-based approach
-agent = Agent(output_type=UserProfile, output_mode=ToolOutput())
+agent = Agent(output_type=UserProfile, output_mode=ToolMode())
 ```
 
 ## Common Migration Patterns
@@ -170,14 +170,14 @@ with warnings.catch_warnings():
 ### 1. Output Modes
 
 ```python
-from strands import NativeOutput, PromptedOutput
+from strands import NativeMode, PromptMode
 
 # Use model's native structured output
-agent = Agent(output_type=UserProfile, output_mode=NativeOutput())
+agent = Agent(output_type=UserProfile, output_mode=NativeMode())
 
 # Use custom prompt template
 template = "Extract information: {prompt}\nFormat as JSON:"
-agent = Agent(output_type=UserProfile, output_mode=PromptedOutput(template=template))
+agent = Agent(output_type=UserProfile, output_mode=PromptMode(template=template))
 ```
 
 ### 2. Model Capability Detection
@@ -195,11 +195,11 @@ bedrock_agent = Agent(model=BedrockModel(model_id="claude-3"), output_type=UserP
 ### 3. Multiple Output Types
 
 ```python
-from strands import OutputSchema, ToolOutput
+from strands import OutputSchema, ToolMode
 
 schema = OutputSchema(
     types=[UserProfile, TaskInfo],
-    mode=ToolOutput(),
+    mode=ToolMode(),
     description="Can output user profile or task information"
 )
 
