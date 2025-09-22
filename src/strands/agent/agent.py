@@ -31,6 +31,8 @@ from typing_extensions import deprecated
 from opentelemetry import trace as trace_api
 from pydantic import BaseModel
 
+from strands.output.modes import NativeMode, ToolMode
+
 from .. import _identifier
 from ..event_loop.event_loop import event_loop_cycle
 from ..handlers.callback_handler import PrintingCallbackHandler, null_callback_handler
@@ -257,7 +259,7 @@ class Agent:
                 When specified, agent calls will return structured output of this type.
                 Defaults to None (no structured output).
             output_mode: Output mode for structured output generation.
-                Defaults to ToolOutput() (function calling) when output_type is specified.
+                Defaults to ToolMode() (function calling) when output_type is specified.
             callback_handler: Callback for processing events as they happen during agent execution.
                 If not provided (using the default), a new PrintingCallbackHandler instance is created.
                 If explicitly set to None, null_callback_handler is used.
@@ -376,7 +378,7 @@ class Agent:
         
         Args:
             output_type: Output type specification
-            output_mode: Output mode (defaults to ToolOutput if not specified)
+            output_mode: Output mode (defaults to ToolMode if not specified)
             
         Returns:
             Resolved OutputSchema or None if no output type specified
@@ -388,16 +390,15 @@ class Agent:
         resolved_schema = self.output_registry.resolve_output_schema(output_type, output_mode)
         
         if resolved_schema and not resolved_schema.mode.is_supported_by_model(self.model):
-            # Check if it's NativeOutput that needs fallback
-            from ..output.modes import NativeOutput, ToolOutput
-            if isinstance(resolved_schema.mode, NativeOutput):
+            # Check if it's NativeMode that needs fallback
+            if isinstance(resolved_schema.mode, NativeMode):
                 logger.warning(
                     f"Model {self.model.__class__.__name__} does not support native structured output. "
                     "Falling back to tool-based approach."
                 )
-                resolved_schema.mode = ToolOutput()
+                resolved_schema.mode = ToolMode()
             else:
-                # This shouldn't happen as ToolOutput and PromptedOutput support all models
+                # This shouldn't happen as ToolMode and PromptMode support all models
                 raise ValueError(
                     f"Model {self.model.__class__.__name__} does not support "
                     f"{resolved_schema.mode.__class__.__name__} output mode"
@@ -498,7 +499,9 @@ class Agent:
                 - metrics: Performance metrics from the event loop
                 - state: The final state of the event loop
         """
-        output_schema: Optional[OutputSchema] = self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
+        # Handle output_schema from kwargs to avoid duplicate keyword argument
+        output_schema_from_kwargs = kwargs.pop('output_schema', None)
+        output_schema: Optional[OutputSchema] = output_schema_from_kwargs or self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
         events = self.stream_async(prompt, output_schema=output_schema, **kwargs)
         async for event in events:
             _ = event
@@ -745,6 +748,20 @@ class Agent:
         # Add output_schema for structured output support
         invocation_state["output_schema"] = output_schema
 
+        # Register structured output tools once per invocation (better architecture)
+        registered_tool_names = []
+        if output_schema:
+            from ..output.modes import ToolMode
+            if isinstance(output_schema.mode, ToolMode):
+                structured_output_tool_instances = output_schema.mode.get_tool_instances(output_schema.type)
+                for tool_instance in structured_output_tool_instances:
+                    tool_name = tool_instance.tool_spec["name"]
+                    # Check if tool is already registered to prevent duplicates
+                    if self.tool_registry.get_tool(tool_name) is None:
+                        self.tool_registry.register_dynamic_tool(tool_instance)
+                        registered_tool_names.append(tool_name)
+                        logger.debug(f"Registered structured output tool for invocation: {tool_name}")
+
         try:
             # Execute the main event loop cycle
             events = event_loop_cycle(
@@ -766,6 +783,12 @@ class Agent:
             events = self._execute_event_loop_cycle(output_schema, invocation_state)
             async for event in events:
                 yield event
+
+        finally:
+            # Cleanup: Deregister structured output tools after invocation
+            for tool_name in registered_tool_names:
+                self.tool_registry.unregister_dynamic_tool(tool_name)
+                logger.debug(f"Deregistered structured output tool after invocation: {tool_name}")
 
     def _convert_prompt_to_messages(self, prompt: AgentInput) -> Messages:
         messages: Messages | None = None

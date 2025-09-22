@@ -23,7 +23,7 @@ from ..experimental.hooks import (
 from ..hooks import (
     MessageAddedEvent,
 )
-from ..output.modes import NativeOutput
+from ..output.modes import NativeMode
 from ..telemetry.metrics import Trace
 from ..telemetry.tracer import get_tracer
 from ..tools._validator import validate_and_prepare_tools
@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 6
 INITIAL_DELAY = 4
 MAX_DELAY = 240  # 4 minutes
+_MAX_STRUCTURED_OUTPUT_ATTEMPTS = 3
 
 
 async def event_loop_cycle(
@@ -150,44 +151,12 @@ async def event_loop_cycle(
                 )
             )
 
-            # Handle tool specifications based on invocation state
             if invocation_state.get("structured_output_only", False):
                 # Only use structured output tools when forcing invocation
-                if output_schema:
-                    tool_specs = output_schema.mode.get_tool_specs(output_schema.type)
-                else:
-                    tool_specs = []
+                tool_specs = output_schema.mode.get_tool_specs(output_schema.type) if output_schema else []
             else:
-                # Normal operation: use all available tools
                 tool_specs = agent.tool_registry.get_all_tool_specs()
-                
-                # Register and add structured output tools if output_schema is specified
-                if output_schema:
-                    # Register structured output tools dynamically
-                    from ..output.modes import ToolOutput
-                    if isinstance(output_schema.mode, ToolOutput):
-                        # Get tool instances and register them only if not already registered
-                        structured_output_tool_instances = output_schema.mode.get_tool_instances(output_schema.type)
-                        for tool_instance in structured_output_tool_instances:
-                            tool_name = tool_instance.tool_spec["name"]
-                            # Check if tool is already registered to prevent duplicates
-                            if agent.tool_registry.get_tool(tool_name) is None:
-                                agent.tool_registry.register_dynamic_tool(tool_instance)
-                    
-                    # Get tool specs for the LLM
-                    structured_output_tools = output_schema.mode.get_tool_specs(output_schema.type)
-                    
-                    # Check for duplicates before extending tool_specs
-                    existing_tool_names = {spec["name"] for spec in tool_specs}
-                    unique_structured_tools = [
-                        spec for spec in structured_output_tools 
-                        if spec["name"] not in existing_tool_names
-                    ]
-                    
-                    if unique_structured_tools:
-                        tool_specs.extend(unique_structured_tools)
 
-            # Get tool_choice parameter if specified
             tool_choice = invocation_state.get("tool_choice")
 
             try:
@@ -321,11 +290,25 @@ async def event_loop_cycle(
         yield ForceStopEvent(reason=e)
         logger.exception("cycle failed")
         raise EventLoopException(e, invocation_state["request_state"]) from e
+    finally:
+        # Ensure cleanup of any remaining structured outputs to prevent memory leaks
+        from ..tools.structured_output_tool import _cleanup_all_structured_outputs
+        _cleanup_all_structured_outputs(invocation_state)
 
     # Force structured output tool call if LLM didn't use it automatically
     if output_schema and stop_reason != "tool_use":
-        # Check if we're using NativeOutput mode
-        if isinstance(output_schema.mode, NativeOutput):
+        # Initialize attempt tracking
+        if "structured_output_attempts" not in invocation_state:
+            invocation_state["structured_output_attempts"] = 0
+        
+        # Check if we've exceeded maximum attempts (circuit breaker)
+        if invocation_state["structured_output_attempts"] >= _MAX_STRUCTURED_OUTPUT_ATTEMPTS:
+            logger.warning(f"Structured output forcing exceeded maximum attempts ({_MAX_STRUCTURED_OUTPUT_ATTEMPTS}), returning without structured output")
+            yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
+            return
+        
+        # Check if we're using NativeMode mode
+        if isinstance(output_schema.mode, NativeMode):
             logger.debug("LLM didn't call structured output tool, trying native structured output")
 
             # Use model's native structured output instead of forcing tools
@@ -356,18 +339,9 @@ async def event_loop_cycle(
                 logger.warning(f"Native structured output failed: {e}, falling back to tool forcing")
                 # Fall through to tool forcing logic below
 
-        logger.debug("LLM didn't call structured output tool, forcing invocation via recursive event loop")
-
-        # Add forcing message to conversation
-        # TODO I don't think we need this. I think we can just pass in the data with the tool with toolChoice
-        # force_message: Message = {
-        #     "role": "user",
-        #     "content": [{"text": f"Use the {output_schema.type.__name__} tool."}]
-        # }
-        # agent.messages.append(force_message)
-        # agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=force_message))
-
-        # TODO testing only; remove the tool_use message (this can never happen in prod because we check in the begining if)
+        # Increment attempt counter before forcing
+        invocation_state["structured_output_attempts"] += 1
+        logger.debug(f"Forcing structured output tool, attempt {invocation_state['structured_output_attempts']}/{_MAX_STRUCTURED_OUTPUT_ATTEMPTS}")
 
         # Create new invocation state for forced call with tool choice
         forced_invocation_state = invocation_state.copy()
@@ -470,19 +444,17 @@ async def _handle_tool_execution(
     # Check if any structured output tools were executed successfully
     structured_output_result = None
     if output_schema and structured_output_tool_names:
-        from ..tools.structured_output_tool import extract_validated_object_from_result
+        from ..tools.structured_output_tool import _extract_structured_output_from_state, _cleanup_structured_outputs
         
-        # Look for successful structured output tool results
-        for tool_result in tool_results:
-            # Check if this result is from a structured output tool
-            # We can identify this by checking if it has the _validated_object key
-            if tool_result.get("status") == "success" and "_validated_object" in tool_result:
-                structured_output_result = extract_validated_object_from_result(tool_result)
-                if structured_output_result is not None:
-                    logger.debug(f"Successfully extracted structured output: {type(structured_output_result).__name__}")
-                    break
+        structured_output_result = _extract_structured_output_from_state(
+            invocation_state, tool_uses, output_schema.type.__name__
+        )
+        
+        # Cleanup any remaining structured outputs
+        tool_use_ids = [str(tool_use.get("toolUseId", "")) for tool_use in tool_uses]
+        _cleanup_structured_outputs(invocation_state, tool_use_ids)
 
-    # If we found structured output, emit the event and stop the event loop
+    # If we found structured output, emit the event and stop the event loop # TODO I think everything after the ` yield StructuredOutpu...` is extra...
     if structured_output_result is not None:
         yield StructuredOutputEvent(structured_output=structured_output_result)
         

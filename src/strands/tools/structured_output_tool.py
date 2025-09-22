@@ -16,6 +16,67 @@ from .structured_output import convert_pydantic_to_tool_spec
 logger = logging.getLogger(__name__)
 
 
+def _store_structured_output(invocation_state: dict[str, Any], tool_use_id: str, validated_object: Any) -> None:
+    """Safely store validated structured output in invocation state with namespaced key."""
+    key = f"structured_output_{tool_use_id}"
+    invocation_state[key] = validated_object
+    logger.debug(f"Stored structured output for tool_use_id: {tool_use_id}")
+
+
+def _extract_structured_output(invocation_state: dict[str, Any], tool_use_id: str) -> Any:
+    """Extract and remove structured output from invocation state."""
+    key = f"structured_output_{tool_use_id}"
+    return invocation_state.pop(key, None)
+
+
+def _cleanup_structured_outputs(invocation_state: dict[str, Any], tool_use_ids: list[str]) -> None:
+    """Clean up any remaining structured outputs to prevent memory leaks."""
+    for tool_use_id in tool_use_ids:
+        key = f"structured_output_{tool_use_id}"
+        if key in invocation_state:
+            del invocation_state[key]
+            logger.debug(f"Cleaned up stale structured output for tool_use_id: {tool_use_id}")
+
+
+def _cleanup_all_structured_outputs(invocation_state: dict[str, Any]) -> None:
+    """Remove all structured output entries from invocation state."""
+    keys_to_remove = [key for key in invocation_state.keys() if key.startswith("structured_output_")]
+    for key in keys_to_remove:
+        del invocation_state[key]
+    if keys_to_remove:
+        logger.debug(f"Final cleanup removed {len(keys_to_remove)} structured output entries")
+
+
+def _extract_structured_output_from_state(
+    invocation_state: dict[str, Any], 
+    tool_uses: list[ToolUse], 
+    expected_tool_name: str
+) -> Any:
+    """Extract structured output from invocation state for successful structured output tools.
+    
+    Args:
+        invocation_state: The current invocation state containing stored structured outputs.
+        tool_uses: List of tool uses that were executed in this cycle.
+        expected_tool_name: The name of the structured output tool we're looking for.
+        
+    Returns:
+        The validated structured output object if found, None otherwise.
+    """
+    # Look for structured output tool uses that match the expected tool name
+    for tool_use in tool_uses:
+        tool_name = tool_use.get("name")
+        tool_use_id = str(tool_use.get("toolUseId", ""))
+        
+        if tool_name == expected_tool_name:
+            # Try to extract the structured output for this tool use
+            structured_output = _extract_structured_output(invocation_state, tool_use_id)
+            if structured_output is not None:
+                logger.debug(f"Successfully extracted structured output for {expected_tool_name} from invocation state")
+                return structured_output
+    
+    return None
+
+
 class StructuredOutputTool(AgentTool):
     """Tool implementation for structured output validation.
     
@@ -91,16 +152,15 @@ class StructuredOutputTool(AgentTool):
             
             logger.debug(f"Successfully validated structured output for {self._tool_name}")
             
-            # Create success result
+            # Store in invocation state with namespaced key
+            _store_structured_output(invocation_state, tool_use_id, validated_object)
+            
+            # Create clean success result - no _validated_object pollution
             result: ToolResult = {
                 "toolUseId": tool_use_id,
                 "status": "success",
                 "content": [{"text": f"Successfully validated {self._tool_name} structured output"}],
             }
-            
-            # Store the validated object in the result for later extraction
-            # We'll use a special key that won't interfere with the standard ToolResult format
-            result["_validated_object"] = validated_object
             
             yield ToolResultEvent(result)
 
@@ -128,6 +188,9 @@ class StructuredOutputTool(AgentTool):
             yield ToolResultEvent(result)
 
         except Exception as e:
+            # Ensure cleanup on unexpected errors
+            _extract_structured_output(invocation_state, tool_use_id)  # Clean up if stored
+            
             # Handle any other unexpected errors
             error_message = f"Unexpected error validating {self._tool_name}: {str(e)}"
             logger.exception(f"Unexpected error in structured output tool {self._tool_name}")
@@ -139,17 +202,3 @@ class StructuredOutputTool(AgentTool):
             }
             
             yield ToolResultEvent(result)
-
-
-def extract_validated_object_from_result(result: ToolResult) -> Any:
-    """Extract the validated Pydantic object from a successful tool result.
-    
-    Args:
-        result: The tool result from a StructuredOutputTool execution.
-        
-    Returns:
-        The validated Pydantic object if present, None otherwise.
-    """
-    if result.get("status") == "success" and "_validated_object" in result:
-        return result["_validated_object"]
-    return None
