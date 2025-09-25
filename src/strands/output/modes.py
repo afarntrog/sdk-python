@@ -7,7 +7,7 @@ from .base import OutputMode
 
 if TYPE_CHECKING:
     from strands.models.model import Model
-    from strands.tools.tool_spec import ToolSpec
+    from strands.types.tools import ToolSpec
     from strands.tools.structured_output_tool import StructuredOutputTool
 
 
@@ -54,16 +54,16 @@ class NativeMode(OutputMode):
 
     def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will use native JSON schema instead."""
-        return []
+        raise NotImplementedError()
 
     def extract_result(self, model_response: Any) -> Any:
         """Extract result from native structured output."""
         # Implementation will be added when integrating with model providers
-        return model_response
+        raise NotImplementedError()
 
     def is_supported_by_model(self, model: "Model") -> bool:
         """Check if model supports native structured output."""
-        return model.supports_native_structured_output()
+        raise NotImplementedError()
 
 
 class PromptMode(OutputMode):
@@ -83,13 +83,12 @@ class PromptMode(OutputMode):
 
     def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will inject schema into system prompt instead."""
-        return []
+        raise NotImplementedError()
 
     def extract_result(self, model_response: Any) -> Any:
         """Extract result from prompted response."""
-        # Implementation will be added when integrating with event loop
-        return model_response
+        raise NotImplementedError()
 
     def is_supported_by_model(self, model: "Model") -> bool:
         """Prompting-based output works with all models."""
-        return True
+        raise NotImplementedError()

@@ -4,9 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Any, Type, Union, Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
+
 if TYPE_CHECKING:
     from strands.models.model import Model
-    from strands.tools.tool_spec import ToolSpec
+    from strands.types.tools import ToolSpec
 
 
 class OutputMode(ABC):
@@ -56,8 +57,6 @@ class OutputSchema:
         self,
         type: Type[BaseModel],
         mode: Optional[OutputMode] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
     ):
         """Initialize output schema.
         
@@ -72,5 +71,3 @@ class OutputSchema:
             from .modes import ToolMode
             mode = ToolMode()
         self.mode = mode
-        self.name = name
-        self.description = description

@@ -748,18 +748,14 @@ class Agent:
         # Add output_schema for structured output support
         invocation_state["output_schema"] = output_schema
 
-        # Register structured output tools once per invocation (better architecture)
-        registered_tool_names = []
         if output_schema:
             from ..output.modes import ToolMode
             if isinstance(output_schema.mode, ToolMode):
                 structured_output_tool_instances = output_schema.mode.get_tool_instances(output_schema.type)
                 for tool_instance in structured_output_tool_instances:
                     tool_name = tool_instance.tool_spec["name"]
-                    # Check if tool is already registered to prevent duplicates
                     if self.tool_registry.get_tool(tool_name) is None:
                         self.tool_registry.register_dynamic_tool(tool_instance)
-                        registered_tool_names.append(tool_name)
                         logger.debug(f"Registered structured output tool for invocation: {tool_name}")
 
         try:
@@ -784,11 +780,6 @@ class Agent:
             async for event in events:
                 yield event
 
-        finally:
-            # Cleanup: Deregister structured output tools after invocation
-            for tool_name in registered_tool_names:
-                self.tool_registry.unregister_dynamic_tool(tool_name)
-                logger.debug(f"Deregistered structured output tool after invocation: {tool_name}")
 
     def _convert_prompt_to_messages(self, prompt: AgentInput) -> Messages:
         messages: Messages | None = None
