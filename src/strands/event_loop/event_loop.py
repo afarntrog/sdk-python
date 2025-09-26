@@ -384,39 +384,33 @@ def _prepare_tools_for_execution(
     return valid_tool_uses, tool_results, invalid_tool_use_ids
 
 
-def _create_tool_result_message(tool_results: list[ToolResult]) -> Message:
-    """Create a tool result message for conversation history.
-    
-    Formats tool results into a user message that can be added to the conversation
-    history and sent back to the model for continued processing.
-    
-    Args:
-        tool_results: List of tool results to include in the message.
-        
-    Returns:
-        A formatted message containing the tool results in the expected format.
-    """
-    return {
-        "role": "user",
-        "content": [{"toolResult": result} for result in tool_results],
-    }
-
-
-def _process_tool_result_message(
+def _create_and_process_tool_result_message(
     agent: "Agent",
-    tool_result_message: Message,
-) -> None:
-    """Process and add a tool result message to the agent's conversation history.
+    tool_results: list[ToolResult],
+) -> Message:
+    """Create and process a tool result message for conversation history.
     
-    Adds the tool result message to the agent's message history and triggers
-    any registered callbacks for message addition events.
+    Formats tool results into a user message, adds it to the agent's conversation
+    history, and triggers any registered callbacks for message addition events.
     
     Args:
         agent: The agent to add the message to.
-        tool_result_message: The tool result message to process.
+        tool_results: List of tool results to include in the message.
+        
+    Returns:
+        The formatted message containing the tool results.
     """
+    tool_result_message = {
+        "role": "user",
+        "content": [{"toolResult": result} for result in tool_results],
+    }
+    
     agent.messages.append(tool_result_message)
     agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
+    
+    return tool_result_message
+    
+    return tool_result_message
 
 
 def _cleanup_event_loop_cycle(
@@ -498,8 +492,7 @@ async def _handle_structured_output(
         yield StructuredOutputEvent(structured_output=structured_output_result), False
         
         # Create and process tool result message
-        tool_result_message = _create_tool_result_message(tool_results)
-        _process_tool_result_message(agent, tool_result_message)
+        tool_result_message = _create_and_process_tool_result_message(agent, tool_results)
         yield ToolResultMessageEvent(message=tool_result_message), False
 
         # End the event loop cycle with structured output
@@ -575,8 +568,7 @@ async def _handle_tool_execution(
     invocation_state["event_loop_parent_cycle_id"] = invocation_state["event_loop_cycle_id"]
 
     # Create and process tool result message
-    tool_result_message = _create_tool_result_message(tool_results)
-    _process_tool_result_message(agent, tool_result_message)
+    tool_result_message = _create_and_process_tool_result_message(agent, tool_results)
     yield ToolResultMessageEvent(message=tool_result_message)
 
     # Cleanup tracing
