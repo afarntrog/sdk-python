@@ -40,7 +40,7 @@ def _cleanup_structured_outputs(invocation_state: dict[str, Any], tool_use_ids: 
 
 def _cleanup_all_structured_outputs(invocation_state: dict[str, Any]) -> None:
     """Remove all structured output entries from invocation state."""
-    keys_to_remove = [key for key in invocation_state.keys() if key.startswith("structured_output_")]
+    keys_to_remove = [key for key in invocation_state.keys() if key.startswith("structured_output_") and key != "structured_output_attempts"]
     for key in keys_to_remove:
         del invocation_state[key]
     if keys_to_remove:

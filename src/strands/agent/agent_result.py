@@ -4,13 +4,12 @@ This module defines the AgentResult class which encapsulates the complete respon
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, Optional
 
 from ..telemetry.metrics import EventLoopMetrics
 from ..types.content import Message
 from ..types.streaming import StopReason
 
-T = TypeVar("T")
 
 
 @dataclass
@@ -30,28 +29,6 @@ class AgentResult:
     metrics: EventLoopMetrics
     state: Any
     structured_output: Optional[Any] = None
-
-    def get_structured_output(self, output_type: Type[T]) -> T:
-        """Get structured output with type safety.
-
-        Args:
-            output_type: Expected output type for type checking
-
-        Returns:
-            Structured output cast to the expected type
-
-        Raises:
-            ValueError: If no structured output available or type mismatch
-        """
-        if self.structured_output is None:
-            raise ValueError("No structured output available in this result")
-
-        if not isinstance(self.structured_output, output_type):
-            raise ValueError(
-                f"Structured output type mismatch: expected {output_type}, got {type(self.structured_output)}"
-            )
-
-        return self.structured_output
 
     def __str__(self) -> str:
         """Get the agent's last message as a string.

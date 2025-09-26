@@ -10,8 +10,6 @@ from ..types.content import Messages
 from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolSpec
 
-if TYPE_CHECKING:
-    from ..output.base import OutputSchema
 
 logger = logging.getLogger(__name__)
 
@@ -96,26 +94,5 @@ class Model(abc.ABC):
 
         Raises:
             ModelThrottledException: When the model service is throttling requests from the client.
-        """
-        pass
-
-    @abc.abstractmethod
-    def supports_native_structured_output(self) -> bool:
-        """Check if model supports native structured output.
-        
-        Returns:
-            True if the model supports native structured output capabilities
-        """
-        pass
-
-    @abc.abstractmethod
-    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
-        """Get model-specific structured output configuration.
-        
-        Args:
-            output_schema: Output schema defining the structured output requirements
-            
-        Returns:
-            Model-specific configuration for structured output
         """
         pass

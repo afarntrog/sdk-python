@@ -28,40 +28,6 @@ class ToolExecutor(abc.ABC):
     """Abstract base class for tool executors."""
 
     @staticmethod
-    def _is_structured_output_tool(tool_name: str, agent: "Agent") -> bool:
-        """Check if a tool is a structured output tool.
-        
-        Args:
-            tool_name: Name of the tool to check
-            agent: The agent instance
-            
-        Returns:
-            True if the tool is a structured output tool
-        """
-        # Check if this is a dynamically registered structured output tool
-        return tool_name in agent.tool_registry.dynamic_tools
-
-    @staticmethod
-    def _validate_structured_output_result(result: ToolResult, tool_name: str) -> ToolResult:
-        """Validate structured output tool result.
-        
-        Args:
-            result: The tool result to validate
-            tool_name: Name of the tool that produced the result
-            
-        Returns:
-            Validated tool result
-        """
-        # For structured output tools, ensure the result is properly formatted
-        print("inside _validate_structured_output_result  "*30)
-        if result.get("status") == "success":
-            logger.debug(f"Validated structured output result for tool: {tool_name}")
-        else:
-            logger.warning(f"Structured output tool {tool_name} returned error status: {result.get('status')}")
-        
-        return result
-
-    @staticmethod
     async def _stream(
         agent: "Agent",
         tool_use: ToolUse,
@@ -169,10 +135,6 @@ class ToolExecutor(abc.ABC):
                     yield ToolStreamEvent(tool_use, event)
 
             result = cast(ToolResult, event)
-
-            # Validate structured output results
-            if ToolExecutor._is_structured_output_tool(tool_name, agent):
-                result = ToolExecutor._validate_structured_output_result(result, tool_name)
 
             after_event = agent.hooks.invoke_callbacks(
                 AfterToolInvocationEvent(

@@ -545,13 +545,3 @@ class MistralModel(Model):
                 raise ValueError(f"Failed to parse tool call arguments into model: {e}") from e
 
         raise ValueError("No tool calls found in response")
-
-    @override
-    def supports_native_structured_output(self) -> bool:
-        """Mistral does not support native structured output."""
-        return False
-
-    @override
-    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
-        """Mistral uses function calling for structured output."""
-        return {}

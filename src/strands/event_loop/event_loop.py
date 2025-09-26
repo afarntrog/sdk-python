@@ -69,8 +69,7 @@ _MAX_STRUCTURED_OUTPUT_ATTEMPTS = 3
 
 async def event_loop_cycle(
     agent: "Agent", 
-    invocation_state: dict[str, Any],
-    output_schema: "Optional[OutputSchema]" = None
+    invocation_state: dict[str, Any]
 ) -> AsyncGenerator[TypedEvent, None]:
     """Execute a single cycle of the event loop.
 
@@ -114,6 +113,7 @@ async def event_loop_cycle(
     attributes = {"event_loop_cycle_id": str(invocation_state.get("event_loop_cycle_id"))}
     cycle_start_time, cycle_trace = agent.event_loop_metrics.start_cycle(attributes=attributes)
     invocation_state["event_loop_cycle_trace"] = cycle_trace
+    output_schema: OutputSchema = invocation_state.get("output_schema")
 
     yield StartEvent()
     yield StartEventLoopEvent()
@@ -151,8 +151,7 @@ async def event_loop_cycle(
                 )
             )
 
-            if invocation_state.get("structured_output_only", False):
-                # Only use structured output tools when forcing invocation
+            if invocation_state.get("structured_output_only"):
                 tool_specs = output_schema.mode.get_tool_specs(output_schema.type) if output_schema else []
             else:
                 tool_specs = agent.tool_registry.get_all_tool_specs()
@@ -245,8 +244,10 @@ async def event_loop_cycle(
                 )
             )
 
-        # If the model is requesting to use tools TODO over here we EXIT the loop if the stop_reason is tool_use so we never get to check if the structured output wasn't called
-        # stop_reason = 'TEST_TODO_AFARN'
+        # If the model is requesting to use tools 
+        # stop_reason = 'TEST_TODO_AFARN' # TODO remove this line... for testing only.
+        # popped_msg = agent.messages.pop() # TODO remove this line... for testing only.
+        # print(popped_msg)
         if stop_reason == "tool_use":
             # Handle tool execution
             events = _handle_tool_execution(
@@ -297,58 +298,24 @@ async def event_loop_cycle(
 
     # Force structured output tool call if LLM didn't use it automatically
     if output_schema and stop_reason != "tool_use":
-        # Initialize attempt tracking
         if "structured_output_attempts" not in invocation_state:
             invocation_state["structured_output_attempts"] = 0
+
         
-        # Check if we've exceeded maximum attempts (circuit breaker)
         if invocation_state["structured_output_attempts"] >= _MAX_STRUCTURED_OUTPUT_ATTEMPTS:
             logger.warning(f"Structured output forcing exceeded maximum attempts ({_MAX_STRUCTURED_OUTPUT_ATTEMPTS}), returning without structured output")
             yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
             return
-        
-        # Check if we're using NativeMode mode
-        if isinstance(output_schema.mode, NativeMode):
-            logger.debug("LLM didn't call structured output tool, trying native structured output")
 
-            # Use model's native structured output instead of forcing tools
-            try:
-                events = agent.model.structured_output(
-                    output_schema.type,
-                    agent.messages,
-                    system_prompt=agent.system_prompt
-                )
-
-                # Process events from native structured output
-                async for event in events:
-                    if "output" in event:
-                        # Emit structured output event
-                        yield StructuredOutputEvent(structured_output=event["output"])
-
-                        # Emit stop event with structured output to properly terminate
-                        yield EventLoopStopEvent(
-                            stop_reason=stop_reason,  # Use the actual stop reason from the original model call
-                            message=message,
-                            metrics=agent.event_loop_metrics,
-                            request_state=invocation_state["request_state"],
-                            structured_output=event["output"]
-                        )
-                        return
-
-            except Exception as e:
-                logger.warning(f"Native structured output failed: {e}, falling back to tool forcing")
-                # Fall through to tool forcing logic below
-
-        # Increment attempt counter before forcing
         invocation_state["structured_output_attempts"] += 1
+
         logger.debug(f"Forcing structured output tool, attempt {invocation_state['structured_output_attempts']}/{_MAX_STRUCTURED_OUTPUT_ATTEMPTS}")
 
-        # Create new invocation state for forced call with tool choice
+        # Create new invocation  If this event loop cycle is called again, it would still have these settings TODO may not be necessary.
         forced_invocation_state = invocation_state.copy()
-        forced_invocation_state["tool_choice"] = {"tool": {"name": output_schema.type.__name__}}
+        forced_invocation_state["tool_choice"] = {"any": {}}
         forced_invocation_state["structured_output_only"] = True
 
-        # Recursively call event loop with constraints
         events = recurse_event_loop(agent=agent, invocation_state=forced_invocation_state)
         async for typed_event in events:
             yield typed_event
@@ -383,7 +350,7 @@ async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -
 
     yield StartEvent()
 
-    events = event_loop_cycle(agent=agent, invocation_state=invocation_state, output_schema=invocation_state.get("output_schema"))
+    events = event_loop_cycle(agent=agent, invocation_state=invocation_state)
     async for event in events:
         yield event
 
@@ -429,7 +396,7 @@ async def _handle_tool_execution(
         return
 
     # Check for structured output tool calls
-    output_schema = invocation_state.get("output_schema")
+    output_schema: OutputSchema = invocation_state.get("output_schema")
     structured_output_tool_names = set()
     if output_schema:
         structured_output_tool_names.add(output_schema.type.__name__)

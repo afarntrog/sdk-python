@@ -533,10 +533,8 @@ class ToolRegistry:
         """
         # Check regular tools first
         tool = self.registry.get(tool_name)
-        if tool is not None:
+        if tool:
             return tool
-            
-        # Check dynamic tools
         return self.dynamic_tools.get(tool_name)
 
     def validate_tool_spec(self, tool_spec: ToolSpec) -> None:

@@ -471,16 +471,3 @@ class OpenAIModel(Model):
         else:
             raise ValueError("No valid tool use or tool use input was found in the OpenAI response.")
 
-    @override
-    def supports_native_structured_output(self) -> bool:
-        """OpenAI supports native structured output via response_format."""
-        return True
-
-    @override
-    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
-        """Get OpenAI-specific structured output configuration."""
-        if output_schema.is_single_type:
-            return {"response_format": output_schema.single_type}
-        else:
-            # OpenAI doesn't support multiple output types natively
-            return {}

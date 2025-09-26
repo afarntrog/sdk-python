@@ -241,13 +241,3 @@ class LiteLLMModel(OpenAIModel):
             model_id = self.get_config()["model_id"]
             if not model_id.startswith("litellm_proxy/"):
                 self.config["model_id"] = f"litellm_proxy/{model_id}"
-
-    @override
-    def supports_native_structured_output(self) -> bool:
-        """LiteLLM support depends on underlying provider."""
-        return False  # Conservative default
-
-    @override
-    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
-        """LiteLLM uses function calling for structured output."""
-        return {}

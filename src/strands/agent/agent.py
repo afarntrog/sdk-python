@@ -745,7 +745,6 @@ class Agent:
         """
         # Add `Agent` to invocation_state to keep backwards-compatibility
         invocation_state["agent"] = self
-        # Add output_schema for structured output support
         invocation_state["output_schema"] = output_schema
 
         if output_schema:
@@ -754,16 +753,14 @@ class Agent:
                 structured_output_tool_instances = output_schema.mode.get_tool_instances(output_schema.type)
                 for tool_instance in structured_output_tool_instances:
                     tool_name = tool_instance.tool_spec["name"]
-                    if self.tool_registry.get_tool(tool_name) is None:
+                    if not self.tool_registry.get_tool(tool_name):
                         self.tool_registry.register_dynamic_tool(tool_instance)
-                        logger.debug(f"Registered structured output tool for invocation: {tool_name}")
 
         try:
             # Execute the main event loop cycle
             events = event_loop_cycle(
                 agent=self,
                 invocation_state=invocation_state,
-                output_schema=output_schema,
             )
             async for event in events:
                 yield event

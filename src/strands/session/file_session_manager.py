@@ -184,7 +184,6 @@ class FileSessionManager(RepositorySessionManager, SessionRepository):
             session_message.message_id,
         )
         session_dict = session_message.to_dict()
-        # TODO It's breaking here! I think it's because the previous line is not properly serailzing the json object
         self._write_file(message_file, session_dict)
 
     def read_message(self, session_id: str, agent_id: str, message_id: int, **kwargs: Any) -> Optional[SessionMessage]:

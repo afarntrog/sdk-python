@@ -106,11 +106,3 @@ class MockedModelProvider(Model):
                     yield {"contentBlockStop": {}}
 
         yield {"messageStop": {"stopReason": stop_reason}}
-
-    def supports_native_structured_output(self) -> bool:
-        """Check if model supports native structured output."""
-        return False
-
-    def get_structured_output_config(self, output_schema: "OutputSchema") -> dict[str, Any]:
-        """Get model-specific structured output configuration."""
-        return {}
