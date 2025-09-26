@@ -357,6 +357,146 @@ async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -
     recursive_trace.end()
 
 
+def _prepare_tools_for_execution(
+    message: Message,
+) -> tuple[list[ToolUse], list[ToolResult], list[str]]:
+    """Prepare and validate tools from a message for execution.
+    
+    Args:
+        message: The message from the model that may contain tool use requests.
+        
+    Returns:
+        A tuple containing:
+            - List of valid tool uses
+            - List of tool results for invalid tools
+            - List of invalid tool use IDs
+    """
+    tool_uses: list[ToolUse] = []
+    tool_results: list[ToolResult] = []
+    invalid_tool_use_ids: list[str] = []
+
+    validate_and_prepare_tools(message, tool_uses, tool_results, invalid_tool_use_ids)
+    valid_tool_uses = [tool_use for tool_use in tool_uses if tool_use.get("toolUseId") not in invalid_tool_use_ids]
+    
+    return valid_tool_uses, tool_results, invalid_tool_use_ids
+
+
+def _create_tool_result_message(tool_results: list[ToolResult]) -> Message:
+    """Create a tool result message for conversation history.
+    
+    Args:
+        tool_results: List of tool results to include in the message.
+        
+    Returns:
+        A formatted message containing the tool results.
+    """
+    return {
+        "role": "user",
+        "content": [{"toolResult": result} for result in tool_results],
+    }
+
+
+def _process_tool_result_message(
+    agent: "Agent",
+    tool_result_message: Message,
+) -> None:
+    """Process and add a tool result message to the agent's conversation history.
+    
+    Args:
+        agent: The agent to add the message to.
+        tool_result_message: The tool result message to process.
+    """
+    agent.messages.append(tool_result_message)
+    agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
+
+
+def _cleanup_event_loop_cycle(
+    cycle_span: Any,
+    cycle_start_time: float,
+    cycle_trace: Trace,
+    agent: "Agent",
+    message: Message,
+    tool_result_message: Message,
+) -> None:
+    """Clean up tracing and metrics for an event loop cycle.
+    
+    Args:
+        cycle_span: Span object for tracing the cycle.
+        cycle_start_time: Start time of the current cycle.
+        cycle_trace: Trace object for the current event loop cycle.
+        agent: The agent for which the cycle is being cleaned up.
+        message: The original message from the model.
+        tool_result_message: The tool result message.
+    """
+    if cycle_span:
+        tracer = get_tracer()
+        tracer.end_event_loop_cycle_span(
+            span=cycle_span, 
+            message=message, 
+            tool_result_message=tool_result_message
+        )
+
+
+async def _handle_structured_output(
+    output_schema: "OutputSchema",
+    invocation_state: dict[str, Any],
+    tool_uses: list[ToolUse],
+    tool_results: list[ToolResult],
+    stop_reason: StopReason,
+    message: Message,
+    agent: "Agent",
+    cycle_start_time: float,
+    cycle_trace: Trace,
+    cycle_span: Any,
+) -> AsyncGenerator[tuple[TypedEvent, bool], None]:
+    """Handle structured output processing and emit appropriate events.
+    
+    Args:
+        output_schema: The output schema to process.
+        invocation_state: Current invocation state.
+        tool_uses: List of tool uses.
+        tool_results: List of tool results.
+        stop_reason: The reason the model stopped generating.
+        message: The original message from the model.
+        agent: The agent processing the structured output.
+        cycle_start_time: Start time of the current cycle.
+        cycle_trace: Trace object for the current event loop cycle.
+        cycle_span: Span object for tracing the cycle.
+        
+    Yields:
+        A tuple of (event, should_stop) where should_stop indicates if processing should halt.
+    """
+    from ..tools.structured_output_tool import _extract_structured_output_from_state, _cleanup_structured_outputs
+    
+    structured_output_result = _extract_structured_output_from_state(
+        invocation_state, tool_uses, output_schema.type.__name__
+    )
+    
+    # Cleanup any remaining structured outputs
+    tool_use_ids = [str(tool_use.get("toolUseId", "")) for tool_use in tool_uses]
+    _cleanup_structured_outputs(invocation_state, tool_use_ids)
+    
+    if structured_output_result is not None:
+        yield StructuredOutputEvent(structured_output=structured_output_result), False
+        
+        # Create and process tool result message
+        tool_result_message = _create_tool_result_message(tool_results)
+        _process_tool_result_message(agent, tool_result_message)
+        yield ToolResultMessageEvent(message=tool_result_message), False
+
+        # End the event loop cycle with structured output
+        agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace, {})
+        _cleanup_event_loop_cycle(cycle_span, cycle_start_time, cycle_trace, agent, message, tool_result_message)
+
+        yield EventLoopStopEvent(
+            stop_reason, 
+            message, 
+            agent.event_loop_metrics, 
+            invocation_state["request_state"],
+            structured_output=structured_output_result
+        ), True
+
+
 async def _handle_tool_execution(
     stop_reason: StopReason,
     message: Message,
@@ -385,92 +525,52 @@ async def _handle_tool_execution(
             - The updated event loop metrics,
             - The updated request state.
     """
-    tool_uses: list[ToolUse] = []
-    tool_results: list[ToolResult] = []
-    invalid_tool_use_ids: list[str] = []
-
-    validate_and_prepare_tools(message, tool_uses, tool_results, invalid_tool_use_ids)
-    tool_uses = [tool_use for tool_use in tool_uses if tool_use.get("toolUseId") not in invalid_tool_use_ids]
+    # Prepare and validate tools
+    tool_uses, tool_results, invalid_tool_use_ids = _prepare_tools_for_execution(message)
+    
     if not tool_uses:
         yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
         return
 
-    # Check for structured output tool calls
-    output_schema: OutputSchema = invocation_state.get("output_schema")
-    structured_output_tool_names = set()
-    if output_schema:
-        structured_output_tool_names.add(output_schema.type.__name__)
-
-    # Execute all tools (including structured output tools) through normal pipeline
+    # Execute all tools through normal pipeline
     tool_events = agent.tool_executor._execute(
         agent, tool_uses, tool_results, cycle_trace, cycle_span, invocation_state
     )
     async for tool_event in tool_events:
         yield tool_event
 
-    # Check if any structured output tools were executed successfully
-    structured_output_result = None
-    if output_schema and structured_output_tool_names:
-        from ..tools.structured_output_tool import _extract_structured_output_from_state, _cleanup_structured_outputs
-        
-        structured_output_result = _extract_structured_output_from_state(
-            invocation_state, tool_uses, output_schema.type.__name__
-        )
-        
-        # Cleanup any remaining structured outputs
-        tool_use_ids = [str(tool_use.get("toolUseId", "")) for tool_use in tool_uses]
-        _cleanup_structured_outputs(invocation_state, tool_use_ids)
-
-    # If we found structured output, emit the event and stop the event loop # TODO I think everything after the ` yield StructuredOutpu...` is extra...
-    if structured_output_result is not None:
-        yield StructuredOutputEvent(structured_output=structured_output_result)
-        
-        # Create tool result message for conversation history
-        tool_result_message: Message = {
-            "role": "user",
-            "content": [{"toolResult": result} for result in tool_results],
-        }
-
-        agent.messages.append(tool_result_message)
-        agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
-        yield ToolResultMessageEvent(message=tool_result_message)
-
-        # End the event loop cycle with structured output
-        agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace, {})
-        if cycle_span:
-            tracer = get_tracer()
-            tracer.end_event_loop_cycle_span(span=cycle_span, message=message, tool_result_message=tool_result_message)
-
-        yield EventLoopStopEvent(
-            stop_reason, 
-            message, 
-            agent.event_loop_metrics, 
-            invocation_state["request_state"],
-            structured_output=structured_output_result
-        )
-        return
+    # Handle structured output if present
+    output_schema: "OutputSchema" = invocation_state.get("output_schema")
+    if output_schema:
+        structured_output_tool_names = {output_schema.type.__name__}
+        if structured_output_tool_names:  # Only proceed if we have structured output tool names
+            async for event, should_stop in _handle_structured_output(
+                output_schema, invocation_state, tool_uses, tool_results,
+                stop_reason, message, agent, cycle_start_time, cycle_trace, cycle_span
+            ):
+                yield event
+                # Check if we should stop processing
+                if should_stop:
+                    return
 
     # Store parent cycle ID for the next cycle
     invocation_state["event_loop_parent_cycle_id"] = invocation_state["event_loop_cycle_id"]
 
-    tool_result_message: Message = {
-        "role": "user",
-        "content": [{"toolResult": result} for result in tool_results],
-    }
-
-    agent.messages.append(tool_result_message)
-    agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
+    # Create and process tool result message
+    tool_result_message = _create_tool_result_message(tool_results)
+    _process_tool_result_message(agent, tool_result_message)
     yield ToolResultMessageEvent(message=tool_result_message)
 
-    if cycle_span:
-        tracer = get_tracer()
-        tracer.end_event_loop_cycle_span(span=cycle_span, message=message, tool_result_message=tool_result_message)
+    # Cleanup tracing
+    _cleanup_event_loop_cycle(cycle_span, cycle_start_time, cycle_trace, agent, message, tool_result_message)
 
+    # Check if we should stop the event loop
     if invocation_state["request_state"].get("stop_event_loop", False):
         agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace)
         yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
         return
 
+    # Continue with recursive event loop processing
     events = recurse_event_loop(agent=agent, invocation_state=invocation_state)
     async for event in events:
         yield event
