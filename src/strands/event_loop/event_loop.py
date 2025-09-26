@@ -12,7 +12,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Tuple
 
 from opentelemetry import trace as trace_api
 
@@ -359,17 +359,20 @@ async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -
 
 def _prepare_tools_for_execution(
     message: Message,
-) -> tuple[list[ToolUse], list[ToolResult], list[str]]:
+) -> Tuple[list[ToolUse], list[ToolResult], list[str]]:
     """Prepare and validate tools from a message for execution.
+    
+    Extracts tool uses from the message content, validates them, and filters out
+    invalid ones while creating error results for invalid tools.
     
     Args:
         message: The message from the model that may contain tool use requests.
         
     Returns:
         A tuple containing:
-            - List of valid tool uses
-            - List of tool results for invalid tools
-            - List of invalid tool use IDs
+            - List of valid tool uses ready for execution
+            - List of tool results for invalid tools (to be included in response)
+            - List of invalid tool use IDs (for filtering)
     """
     tool_uses: list[ToolUse] = []
     tool_results: list[ToolResult] = []
@@ -384,11 +387,14 @@ def _prepare_tools_for_execution(
 def _create_tool_result_message(tool_results: list[ToolResult]) -> Message:
     """Create a tool result message for conversation history.
     
+    Formats tool results into a user message that can be added to the conversation
+    history and sent back to the model for continued processing.
+    
     Args:
         tool_results: List of tool results to include in the message.
         
     Returns:
-        A formatted message containing the tool results.
+        A formatted message containing the tool results in the expected format.
     """
     return {
         "role": "user",
@@ -401,6 +407,9 @@ def _process_tool_result_message(
     tool_result_message: Message,
 ) -> None:
     """Process and add a tool result message to the agent's conversation history.
+    
+    Adds the tool result message to the agent's message history and triggers
+    any registered callbacks for message addition events.
     
     Args:
         agent: The agent to add the message to.
@@ -420,8 +429,12 @@ def _cleanup_event_loop_cycle(
 ) -> None:
     """Clean up tracing and metrics for an event loop cycle.
     
+    Handles the cleanup of tracing spans at the end of an event loop cycle.
+    This is separated to avoid code duplication between structured output
+    and regular tool execution paths.
+    
     Args:
-        cycle_span: Span object for tracing the cycle.
+        cycle_span: Span object for tracing the cycle (may be None).
         cycle_start_time: Start time of the current cycle.
         cycle_trace: Trace object for the current event loop cycle.
         agent: The agent for which the cycle is being cleaned up.
@@ -448,14 +461,18 @@ async def _handle_structured_output(
     cycle_start_time: float,
     cycle_trace: Trace,
     cycle_span: Any,
-) -> AsyncGenerator[tuple[TypedEvent, bool], None]:
+) -> AsyncGenerator[Tuple[TypedEvent, bool], None]:
     """Handle structured output processing and emit appropriate events.
+    
+    Processes structured output from tool executions, emits the structured output
+    event, and handles the cleanup and termination of the event loop when
+    structured output is successfully generated.
     
     Args:
         output_schema: The output schema to process.
         invocation_state: Current invocation state.
-        tool_uses: List of tool uses.
-        tool_results: List of tool results.
+        tool_uses: List of tool uses that were executed.
+        tool_results: List of tool results from execution.
         stop_reason: The reason the model stopped generating.
         message: The original message from the model.
         agent: The agent processing the structured output.
@@ -464,7 +481,8 @@ async def _handle_structured_output(
         cycle_span: Span object for tracing the cycle.
         
     Yields:
-        A tuple of (event, should_stop) where should_stop indicates if processing should halt.
+        A tuple of (event, should_stop) where should_stop indicates if the
+        event loop should halt processing after this event.
     """
     from ..tools.structured_output_tool import _extract_structured_output_from_state, _cleanup_structured_outputs
     
