@@ -409,8 +409,6 @@ def _create_and_process_tool_result_message(
     agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
     
     return tool_result_message
-    
-    return tool_result_message
 
 
 def _cleanup_event_loop_cycle(
