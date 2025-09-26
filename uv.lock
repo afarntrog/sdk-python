@@ -3159,13 +3159,6 @@ writer = [
     { name = "writer-sdk" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "moto" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=0.3.0,<0.4.0" },
@@ -3229,13 +3222,6 @@ requires-dist = [
     { name = "writer-sdk", marker = "extra == 'writer'", specifier = ">=2.2.0,<3.0.0" },
 ]
 provides-extras = ["a2a", "all", "anthropic", "dev", "docs", "litellm", "llamaapi", "mistral", "ollama", "openai", "otel", "sagemaker", "writer"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "moto", specifier = ">=5.1.12" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest-asyncio", specifier = ">=1.1.1" },
-]
 
 [[package]]
 name = "termcolor"

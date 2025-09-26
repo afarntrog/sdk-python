@@ -57,10 +57,6 @@ if TYPE_CHECKING:
     from ..agent.agent import Agent
     from ..output.base import OutputSchema
 
-
-if TYPE_CHECKING:
-    from ..agent import Agent
-
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 6
@@ -69,10 +65,7 @@ MAX_DELAY = 240  # 4 minutes
 _MAX_STRUCTURED_OUTPUT_ATTEMPTS = 3
 
 
-async def event_loop_cycle(
-    agent: "Agent", 
-    invocation_state: dict[str, Any]
-) -> AsyncGenerator[TypedEvent, None]:
+async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> AsyncGenerator[TypedEvent, None]:
     """Execute a single cycle of the event loop.
 
     This core function processes a single conversation turn, handling model inference, tool execution, and error
@@ -246,10 +239,6 @@ async def event_loop_cycle(
                 )
             )
 
-        # If the model is requesting to use tools 
-        # stop_reason = 'TEST_TODO_AFARN' # TODO remove this line... for testing only.
-        # popped_msg = agent.messages.pop() # TODO remove this line... for testing only.
-        # print(popped_msg)
         if stop_reason == "tool_use":
             # Handle tool execution
             events = _handle_tool_execution(
@@ -390,7 +379,23 @@ async def _handle_tool_execution(
     cycle_start_time: float,
     invocation_state: dict[str, Any],
 ) -> AsyncGenerator[TypedEvent, None]:
-    """Handles the execution of tools requested by the model during an event loop cycle."""
+    """Handles the execution of tools requested by the model during an event loop cycle.
+    Args:
+        stop_reason: The reason the model stopped generating.
+        message: The message from the model that may contain tool use requests.
+        agent: Agent for which tools are being executed.
+        cycle_trace: Trace object for the current event loop cycle.
+        cycle_span: Span object for tracing the cycle (type may vary).
+        cycle_start_time: Start time of the current cycle.
+        invocation_state: Additional keyword arguments, including request state.
+    Yields:
+        Tool stream events along with events yielded from a recursive call to the event loop. The last event is a tuple
+        containing:
+            - The stop reason,
+            - The updated message,
+            - The updated event loop metrics,
+            - The updated request state.
+    """
     tool_uses: list[ToolUse] = []
     tool_results: list[ToolResult] = []
     invalid_tool_use_ids: list[str] = []
@@ -416,7 +421,15 @@ async def _handle_tool_execution(
 
     invocation_state["event_loop_parent_cycle_id"] = invocation_state["event_loop_cycle_id"]
 
-    tool_result_message = _create_and_process_tool_result_message(agent, tool_results)
+    # tool_result_message = _create_and_process_tool_result_message(agent, tool_results)
+    tool_result_message: Message = {
+        "role": "user",
+        "content": [{"toolResult": result} for result in tool_results],
+    }
+
+    agent.messages.append(tool_result_message)
+    agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
+
     yield ToolResultMessageEvent(message=tool_result_message)
 
     if cycle_span:

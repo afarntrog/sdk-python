@@ -32,7 +32,7 @@ class StructuredOutputTool(AgentTool):
         super().__init__()
         self._output_type = output_type
         self._tool_spec = convert_pydantic_to_tool_spec(output_type)
-        self._tool_name = output_type.__name__
+        self._tool_name = self._tool_spec.get("name")
 
     @property
     def tool_name(self) -> str:

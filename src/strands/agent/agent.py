@@ -285,13 +285,9 @@ class Agent:
         """
         self.model = BedrockModel() if not model else BedrockModel(model_id=model) if isinstance(model, str) else model
         self.messages = messages if messages is not None else []
-
         self.system_prompt = system_prompt
-        
-        # Initialize output schema and registry
         self.output_registry = OutputRegistry()
-        self.default_output_schema = self._resolve_output_schema(output_type, None)
-        
+        self.default_output_schema = self.output_registry.resolve_output_schema(output_type)
         self.agent_id = _identifier.validate(agent_id or _DEFAULT_AGENT_ID, _identifier.Identifier.AGENT)
         self.name = name or _DEFAULT_AGENT_NAME
         self.description = description
@@ -364,43 +360,6 @@ class Agent:
             for hook in hooks:
                 self.hooks.add_hook(hook)
         self.hooks.invoke_callbacks(AgentInitializedEvent(agent=self))
-
-    def _resolve_output_schema(
-        self,
-        output_type: Optional[Type[BaseModel]] = None,
-        output_mode: Optional["OutputMode"] = None,
-    ) -> Optional[OutputSchema]:
-        """Resolve output type and mode into OutputSchema with model support validation.
-        
-        Args:
-            output_type: Output type specification
-            output_mode: Output mode (defaults to ToolMode if not specified)
-            
-        Returns:
-            Resolved OutputSchema or None if no output type specified
-        """
-        if not output_type:
-            return None
-
-        # Use registry to resolve the schema
-        resolved_schema = self.output_registry.resolve_output_schema(output_type, output_mode)
-        
-        if resolved_schema and not resolved_schema.mode.is_supported_by_model(self.model):
-            # Check if it's NativeMode that needs fallback
-            if isinstance(resolved_schema.mode, NativeMode):
-                logger.warning(
-                    f"Model {self.model.__class__.__name__} does not support native structured output. "
-                    "Falling back to tool-based approach."
-                )
-                resolved_schema.mode = ToolMode()
-            else:
-                # This shouldn't happen as ToolMode and PromptMode support all models
-                raise ValueError(
-                    f"Model {self.model.__class__.__name__} does not support "
-                    f"{resolved_schema.mode.__class__.__name__} output mode"
-                )
-        
-        return resolved_schema
 
     @property
     def tool(self) -> ToolCaller:
@@ -492,9 +451,8 @@ class Agent:
                 - metrics: Performance metrics from the event loop
                 - state: The final state of the event loop
         """
-        # Handle output_schema from kwargs to avoid duplicate keyword argument
         output_schema_from_kwargs = kwargs.pop('output_schema', None)
-        output_schema: Optional[OutputSchema] = output_schema_from_kwargs or self._resolve_output_schema(output_type, None) or self.default_output_schema
+        output_schema: Optional[OutputSchema] = output_schema_from_kwargs or self.output_registry.resolve_output_schema(output_type) or self.default_output_schema
         events = self.stream_async(prompt, output_schema=output_schema, **kwargs)
         async for event in events:
             _ = event
@@ -647,7 +605,7 @@ class Agent:
 
         # Resolve output schema (runtime override or agent default) TODO we should allow for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `output_type` on the `output_mode`
         if output_schema is None:
-            output_schema = self._resolve_output_schema(output_type, None) or self.default_output_schema
+            output_schema = self.output_registry.resolve_output_schema(output_type) or self.default_output_schema
 
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)
@@ -666,15 +624,7 @@ class Agent:
                         callback_handler(**as_dict)
                         yield as_dict
 
-                # Handle structured output from event loop
-                stop_data = event["stop"]
-                if len(stop_data) == 5:  # New format with structured_output
-                    stop_reason, message, metrics, state, structured_output = stop_data
-                    result = AgentResult(stop_reason, message, metrics, state, structured_output)
-                else:  # Legacy format without structured_output
-                    stop_reason, message, metrics, state = stop_data
-                    result = AgentResult(stop_reason, message, metrics, state, None)
-                    
+                result = AgentResult(*event["stop"])
                 callback_handler(result=result)
                 yield AgentResultEvent(result=result).as_dict()
 
@@ -702,8 +652,10 @@ class Agent:
             for message in messages:
                 self._append_message(message)
 
+            invocation_state["output_schema"] = output_schema
+
             # Execute the event loop cycle with retry logic for context limits
-            events = self._execute_event_loop_cycle(output_schema, invocation_state)
+            events = self._execute_event_loop_cycle(invocation_state)
             async for event in events:
                 # Signal from the model provider that the message sent by the user should be redacted,
                 # likely due to a guardrail.
@@ -724,7 +676,7 @@ class Agent:
             self.conversation_manager.apply_management(self)
             self.hooks.invoke_callbacks(AfterInvocationEvent(agent=self))
 
-    async def _execute_event_loop_cycle(self, output_schema: Optional[OutputSchema], invocation_state: dict[str, Any]) -> AsyncGenerator[TypedEvent, None]:
+    async def _execute_event_loop_cycle(self, invocation_state: dict[str, Any]) -> AsyncGenerator[TypedEvent, None]:
         """Execute the event loop cycle with retry logic for context window limits.
 
         This internal method handles the execution of the event loop cycle and implements
@@ -736,15 +688,14 @@ class Agent:
         """
         # Add `Agent` to invocation_state to keep backwards-compatibility
         invocation_state["agent"] = self
-        invocation_state["output_schema"] = output_schema
+        output_schema: OutputSchema = invocation_state.get("output_schema")
 
         if output_schema:
             from ..output.modes import ToolMode
             if isinstance(output_schema.mode, ToolMode):
                 structured_output_tool_instances = output_schema.mode.get_tool_instances(output_schema.type)
                 for tool_instance in structured_output_tool_instances:
-                    tool_name = tool_instance.tool_spec["name"]
-                    if not self.tool_registry.get_tool(tool_name):
+                    if not self.tool_registry.get_tool(tool_instance.tool_name):
                         self.tool_registry.register_dynamic_tool(tool_instance)
 
         try:
@@ -764,7 +715,7 @@ class Agent:
             if self._session_manager:
                 self._session_manager.sync_agent(self)
 
-            events = self._execute_event_loop_cycle(output_schema, invocation_state)
+            events = self._execute_event_loop_cycle(invocation_state)
             async for event in events:
                 yield event
 

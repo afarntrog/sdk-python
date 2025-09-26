@@ -612,5 +612,3 @@ class SageMakerAIModel(OpenAIModel):
         ) as e:
             logger.error("SageMaker structured output error: %s", str(e))
             raise ValueError(f"SageMaker structured output error: {str(e)}") from e
-
-

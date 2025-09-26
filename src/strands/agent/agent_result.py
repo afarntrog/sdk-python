@@ -6,6 +6,8 @@ This module defines the AgentResult class which encapsulates the complete respon
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from pydantic import BaseModel
+
 from ..telemetry.metrics import EventLoopMetrics
 from ..types.content import Message
 from ..types.streaming import StopReason
@@ -28,7 +30,7 @@ class AgentResult:
     message: Message
     metrics: EventLoopMetrics
     state: Any
-    structured_output: Optional[Any] = None
+    structured_output: Optional[BaseModel] = None
 
     def __str__(self) -> str:
         """Get the agent's last message as a string.

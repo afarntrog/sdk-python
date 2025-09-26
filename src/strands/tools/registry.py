@@ -502,9 +502,8 @@ class ToolRegistry:
         Args:
             tool: The tool to register dynamically
         """
-        tool_spec = tool.tool_spec
-        self.dynamic_tools[tool_spec["name"]] = tool
-        logger.debug(f"Registered dynamic tool: {tool_spec['name']}")
+        self.dynamic_tools[tool.tool_name] = tool
+        logger.debug(f"Registered dynamic tool: {tool.tool_name}")
 
     def unregister_dynamic_tool(self, tool_name: str) -> None:
         """Unregister a dynamically registered tool.
