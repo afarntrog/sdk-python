@@ -4,8 +4,7 @@ from typing import Any, Type, Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
 from .base import OutputMode
-from strands.tools.structured_output_tool import StructuredOutputTool
-from strands.tools.structured_output import convert_pydantic_to_tool_spec
+from strands.tools.structured_output.structured_output_tool import StructuredOutputTool
 
 if TYPE_CHECKING:
     from strands.models.model import Model

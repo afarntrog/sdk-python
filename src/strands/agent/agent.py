@@ -47,6 +47,7 @@ from ..hooks import (
 from ..models.bedrock import BedrockModel
 from ..models.model import Model
 from ..output.base import OutputSchema
+from ..output.base import OutputMode
 from ..output.registry import OutputRegistry
 from ..session.session_manager import SessionManager
 from ..telemetry.metrics import EventLoopMetrics
@@ -68,8 +69,6 @@ from .conversation_manager import (
 )
 from .state import AgentState
 
-if TYPE_CHECKING:
-    from ..output.base import OutputMode
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +218,6 @@ class Agent:
         tools: Optional[list[Union[str, dict[str, str], Any]]] = None,
         system_prompt: Optional[str] = None,
         output_type: Optional[Type[BaseModel]] = None,
-        output_mode: Optional["OutputMode"] = None,
         callback_handler: Optional[
             Union[Callable[..., Any], _DefaultCallbackHandlerSentinel]
         ] = _DEFAULT_CALLBACK_HANDLER,
@@ -258,8 +256,6 @@ class Agent:
             output_type: Pydantic model type(s) for structured output.
                 When specified, agent calls will return structured output of this type.
                 Defaults to None (no structured output).
-            output_mode: Output mode for structured output generation.
-                Defaults to ToolMode() (function calling) when output_type is specified.
             callback_handler: Callback for processing events as they happen during agent execution.
                 If not provided (using the default), a new PrintingCallbackHandler instance is created.
                 If explicitly set to None, null_callback_handler is used.
@@ -294,7 +290,7 @@ class Agent:
         
         # Initialize output schema and registry
         self.output_registry = OutputRegistry()
-        self.default_output_schema = self._resolve_output_schema(output_type, output_mode)
+        self.default_output_schema = self._resolve_output_schema(output_type, None)
         
         self.agent_id = _identifier.validate(agent_id or _DEFAULT_AGENT_ID, _identifier.Identifier.AGENT)
         self.name = name or _DEFAULT_AGENT_NAME
@@ -435,7 +431,6 @@ class Agent:
         self, 
         prompt: AgentInput = None, 
         output_type: Optional[Type[BaseModel]] = None,
-        output_mode: Optional["OutputMode"] = None,
         **kwargs: Any
     ) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
@@ -453,7 +448,6 @@ class Agent:
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
             output_type: Pydantic model type(s) for structured output (overrides agent default).
-            output_mode: Output mode for structured output (overrides agent default).
             **kwargs: Additional parameters to pass through the event loop.
 
         Returns:
@@ -466,13 +460,13 @@ class Agent:
                 - structured_output: Parsed structured output when output_type was specified
         """
         def execute() -> AgentResult:
-            return asyncio.run(self.invoke_async(prompt, output_type, output_mode, **kwargs))
+            return asyncio.run(self.invoke_async(prompt, output_type, **kwargs))
 
         with ThreadPoolExecutor() as executor:
             future = executor.submit(execute)
             return future.result()
 
-    async def invoke_async(self, prompt: AgentInput = None, output_type: Optional[Type[BaseModel]] = None, output_mode: Optional["OutputMode"] = None, **kwargs: Any) -> AgentResult:
+    async def invoke_async(self, prompt: AgentInput = None, output_type: Optional[Type[BaseModel]] = None, **kwargs: Any) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
 
         This method implements the conversational interface with multiple input patterns:
@@ -488,7 +482,6 @@ class Agent:
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
             output_type: Pydantic model type(s) for structured output (overrides agent default).
-            output_mode: Output mode for structured output (overrides agent default).
             **kwargs: Additional parameters to pass through the event loop.
 
         Returns:
@@ -501,7 +494,7 @@ class Agent:
         """
         # Handle output_schema from kwargs to avoid duplicate keyword argument
         output_schema_from_kwargs = kwargs.pop('output_schema', None)
-        output_schema: Optional[OutputSchema] = output_schema_from_kwargs or self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
+        output_schema: Optional[OutputSchema] = output_schema_from_kwargs or self._resolve_output_schema(output_type, None) or self.default_output_schema
         events = self.stream_async(prompt, output_schema=output_schema, **kwargs)
         async for event in events:
             _ = event
@@ -610,7 +603,6 @@ class Agent:
         self,
         prompt: AgentInput = None,
         output_type: Optional[Type[BaseModel]] = None,
-        output_mode: Optional["OutputMode"] = None,
         output_schema: Optional[OutputSchema] = None,
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
@@ -629,8 +621,7 @@ class Agent:
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
             output_type: Pydantic model type(s) for structured output (overrides agent default).
-            output_mode: Output mode for structured output (overrides agent default).
-            output_schema: Pre-resolved output schema (takes precedence over output_type/output_mode).
+            output_schema: Pre-resolved output schema (takes precedence over output_type).
             **kwargs: Additional parameters to pass to the event loop.
 
         Yields:
@@ -656,7 +647,7 @@ class Agent:
 
         # Resolve output schema (runtime override or agent default) TODO we should allow for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `output_type` on the `output_mode`
         if output_schema is None:
-            output_schema = self._resolve_output_schema(output_type, output_mode) or self.default_output_schema
+            output_schema = self._resolve_output_schema(output_type, None) or self.default_output_schema
 
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)

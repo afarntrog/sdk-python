@@ -14,7 +14,7 @@ import strands
 from strands import Agent
 from strands.output.modes import ToolMode
 from strands.types.output import OutputSchema
-from strands.tools.structured_output_tool import StructuredOutputTool
+from strands.tools.structured_output.structured_output_tool import StructuredOutputTool
 from tests.fixtures.mocked_model_provider import MockedModelProvider
 
 
