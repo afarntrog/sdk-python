@@ -111,13 +111,22 @@ Follow the structured logging pattern defined in STYLE_GUIDE.md:
 logger.debug("field1=<%s>, field2=<%s> | human readable message", field1, field2)
 ```
 
+### Code Style and Structure
+- You MUST follow PEP 8 style guide and you MUST follow clean code principles
+- Structure code in logical modules following domain-driven design
+- Implement proper separation of concerns (views, models, services, utils)
+- Use modern Python features (type hints, dataclasses, async/await) appropriately
+- Maintain consistent code formatting using `ruff` linter
+- Use proper package structure and __init__.py files
+
+
 ### Type Annotations
 - All public APIs must have complete type hints
 - Use `typing.Optional` for nullable types
 - Pydantic models for complex data structures
 
 ### Docstrings
-- Google-style docstrings for all public classes and functions
+- Include comprehensive docstrings using Google-style docstrings for all classes and functions
 - Tool docstrings are used by LLMs to understand tool purpose
 
 ### Testing

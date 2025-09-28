@@ -5,15 +5,19 @@ with the existing tool execution and error handling infrastructure.
 """
 
 import logging
+from copy import deepcopy
 from typing import Any, Type
-from typing_extensions import override
+
 from pydantic import BaseModel, ValidationError
+from typing_extensions import override
 
 from ...types._events import ToolResultEvent
-from ...types.tools import AgentTool, ToolGenerator, ToolSpec, ToolUse, ToolResult
+from ...types.tools import AgentTool, ToolGenerator, ToolResult, ToolSpec, ToolUse
 from .structured_output_utils import convert_pydantic_to_tool_spec
 
 logger = logging.getLogger(__name__)
+
+_TOOL_SPEC_CACHE: dict[Type[BaseModel], ToolSpec] = {}
 
 
 class StructuredOutputTool(AgentTool):
@@ -31,8 +35,22 @@ class StructuredOutputTool(AgentTool):
         """
         super().__init__()
         self._output_type = output_type
-        self._tool_spec = convert_pydantic_to_tool_spec(output_type)
+        self._tool_spec = self._get_tool_spec(output_type)
         self._tool_name = self._tool_spec.get("name")
+
+    @classmethod
+    def _get_tool_spec(cls, output_type: Type[BaseModel]) -> ToolSpec:
+        """Get a cached tool spec for the given output type.
+
+        Args:
+            output_type: The Pydantic model class that defines the expected output structure.
+
+        Returns:
+            Cached tool specification for the output type.
+        """
+        if output_type not in _TOOL_SPEC_CACHE:
+            _TOOL_SPEC_CACHE[output_type] = convert_pydantic_to_tool_spec(output_type)
+        return deepcopy(_TOOL_SPEC_CACHE[output_type])
 
     @property
     def tool_name(self) -> str:
@@ -89,7 +107,7 @@ class StructuredOutputTool(AgentTool):
             # Attempt to create and validate the Pydantic object
             validated_object = self._output_type(**tool_input)
             
-            logger.debug(f"Successfully validated structured output for {self._tool_name}")
+            logger.debug("tool_name=<%s> | structured output validated", self._tool_name)
             
             # Store in invocation state with namespaced key
             key = f"structured_output_{tool_use_id}"
@@ -105,7 +123,6 @@ class StructuredOutputTool(AgentTool):
             yield ToolResultEvent(result)
 
         except ValidationError as e:
-            # Create detailed error message for the LLM
             error_details = []
             for error in e.errors():
                 field_path = " -> ".join(str(loc) for loc in error["loc"]) if error["loc"] else "root"
@@ -115,10 +132,13 @@ class StructuredOutputTool(AgentTool):
                 f"Validation failed for {self._tool_name}. Please fix the following errors:\n" +
                 "\n".join(f"- {detail}" for detail in error_details)
             )
+            logger.error(
+                "tool_name=<%s> | structured output validation failed | error_message=<%s>",
+                self._tool_name,
+                error_message,
+            )
             
-            logger.warning(f"Structured output validation failed for {self._tool_name}: {error_message}")
-            
-            # Create error result that will be sent back to the LLM
+            # Create error result that will be sent back to the LLM so it can decide if it needs to retry
             result: ToolResult = {
                 "toolUseId": tool_use_id,
                 "status": "error",
@@ -128,13 +148,10 @@ class StructuredOutputTool(AgentTool):
             yield ToolResultEvent(result)
 
         except Exception as e:
-            # Ensure cleanup on unexpected errors
             key = f"structured_output_{tool_use_id}"
             invocation_state.pop(key, None)
-            
-            # Handle any other unexpected errors
             error_message = f"Unexpected error validating {self._tool_name}: {str(e)}"
-            logger.exception(f"Unexpected error in structured output tool {self._tool_name}")
+            logger.exception(error_message)
             
             result: ToolResult = {
                 "toolUseId": tool_use_id,
