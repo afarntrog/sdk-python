@@ -14,11 +14,11 @@ class OutputMode(ABC):
     """Base class for different structured output modes."""
 
     @abstractmethod
-    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
+    def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Convert output type to tool specifications.
         
         Args:
-            output_type: Pydantic model type to convert
+            structured_output_type: Pydantic model type to convert
             
         Returns:
             List of tool specifications for the output type

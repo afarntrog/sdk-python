@@ -18,20 +18,20 @@ class ToolMode(OutputMode):
     consistent behavior regardless of model capabilities.
     """
 
-    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
+    def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Convert Pydantic model to tool specifications."""
-        return [StructuredOutputTool(output_type).tool_spec]
+        return [StructuredOutputTool(structured_output_type).tool_spec]
 
-    def get_tool_instances(self, output_type: Type[BaseModel]) -> list["StructuredOutputTool"]:
+    def get_tool_instances(self, structured_output_type: Type[BaseModel]) -> list["StructuredOutputTool"]:
         """Create actual tool instances for structured output.
         
         Args:
-            output_type: The Pydantic model class to create tools for.
+            structured_output_type: The Pydantic model class to create tools for.
             
         Returns:
             List containing a single StructuredOutputTool instance.
         """
-        return [StructuredOutputTool(output_type)]
+        return [StructuredOutputTool(structured_output_type)]
 
     def extract_result(self, model_response: Any) -> Any:
         """Extract result from tool call response."""
@@ -50,7 +50,7 @@ class NativeMode(OutputMode):
     Falls back to ToolMode if not supported.
     """
 
-    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
+    def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will use native JSON schema instead."""
         raise NotImplementedError()
 
@@ -79,7 +79,7 @@ class PromptMode(OutputMode):
         """
         self.template = template or "Please respond with JSON matching this schema: {schema}"
 
-    def get_tool_specs(self, output_type: Type[BaseModel]) -> list["ToolSpec"]:
+    def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will inject schema into system prompt instead."""
         raise NotImplementedError()
 
