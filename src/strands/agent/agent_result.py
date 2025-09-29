@@ -13,7 +13,6 @@ from ..types.content import Message
 from ..types.streaming import StopReason
 
 
-
 @dataclass
 class AgentResult:
     """Represents the last result of invoking an agent with a prompt.

@@ -6,7 +6,7 @@ from .utils import resolve_output_schema
 
 __all__ = [
     "OutputMode",
-    "OutputSchema", 
+    "OutputSchema",
     "ToolMode",
     "NativeMode",
     "PromptMode",

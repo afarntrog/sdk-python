@@ -383,10 +383,7 @@ class Agent:
         return list(all_tools.keys())
 
     def __call__(
-        self, 
-        prompt: AgentInput = None, 
-        structured_output_type: Optional[Type[BaseModel]] = None,
-        **kwargs: Any
+        self, prompt: AgentInput = None, structured_output_type: Optional[Type[BaseModel]] = None, **kwargs: Any
     ) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
 
@@ -414,6 +411,7 @@ class Agent:
                 - state: The final state of the event loop
                 - structured_output: Parsed structured output when structured_output_type was specified
         """
+
         def execute() -> AgentResult:
             return asyncio.run(self.invoke_async(prompt, structured_output_type, **kwargs))
 
@@ -421,7 +419,9 @@ class Agent:
             future = executor.submit(execute)
             return future.result()
 
-    async def invoke_async(self, prompt: AgentInput = None, structured_output_type: Optional[Type[BaseModel]] = None, **kwargs: Any) -> AgentResult:
+    async def invoke_async(
+        self, prompt: AgentInput = None, structured_output_type: Optional[Type[BaseModel]] = None, **kwargs: Any
+    ) -> AgentResult:
         """Process a natural language prompt through the agent's event loop.
 
         This method implements the conversational interface with multiple input patterns:
@@ -454,9 +454,9 @@ class Agent:
         return cast(AgentResult, event["result"])
 
     @deprecated(
-        'Agent.structured_output method is deprecated.'
-        ' You should pass in `structured_output_type` directly into the agent invocation.'
-        ' see the <LINK> for more details'
+        "Agent.structured_output method is deprecated."
+        " You should pass in `structured_output_type` directly into the agent invocation."
+        " see the <LINK> for more details"
     )
     def structured_output(self, output_model: Type[T], prompt: AgentInput = None) -> T:
         """This method allows you to get structured output from the agent.
@@ -488,9 +488,9 @@ class Agent:
             return future.result()
 
     @deprecated(
-        'Agent.structured_output_async method is deprecated.'
-        ' You should pass in `structured_output_type` directly into the agent invocation.'
-        ' see the <LINK> for more details'
+        "Agent.structured_output_async method is deprecated."
+        " You should pass in `structured_output_type` directly into the agent invocation."
+        " see the <LINK> for more details"
     )
     async def structured_output_async(self, output_model: Type[T], prompt: AgentInput = None) -> T:
         """This method allows you to get structured output from the agent.
@@ -594,7 +594,9 @@ class Agent:
         callback_handler = kwargs.get("callback_handler", self.callback_handler)
 
         # runtime override or agent default TODO in the future, when we expose 'output_schema, we should consider allowing for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `structured_output_type` on the `output_mode`
-        output_schema: Optional[OutputSchema] = resolve_output_schema(structured_output_type) or self.default_output_schema
+        output_schema: Optional[OutputSchema] = (
+            resolve_output_schema(structured_output_type) or self.default_output_schema
+        )
 
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)
@@ -623,7 +625,9 @@ class Agent:
                 self._end_agent_trace_span(error=e)
                 raise
 
-    async def _run_loop(self, messages: Messages, invocation_state: dict[str, Any], output_schema: Optional[OutputSchema] = None) -> AsyncGenerator[TypedEvent, None]:
+    async def _run_loop(
+        self, messages: Messages, invocation_state: dict[str, Any], output_schema: Optional[OutputSchema] = None
+    ) -> AsyncGenerator[TypedEvent, None]:
         """Execute the agent's event loop with the given message and parameters.
 
         Args:
@@ -703,7 +707,6 @@ class Agent:
             events = self._execute_event_loop_cycle(invocation_state)
             async for event in events:
                 yield event
-
 
     def _convert_prompt_to_messages(self, prompt: AgentInput) -> Messages:
         messages: Messages | None = None

@@ -34,7 +34,9 @@ class StructuredOutputTool(AgentTool):
         super().__init__()
         self._structured_output_type = structured_output_type
         self._tool_spec = self._get_tool_spec(structured_output_type)
-        self._tool_spec['description'] = f"IMPORTANT: This StructuredOutputTool should only be invoked as the last and final tool before returning the completed result to the caller. <description>{self._tool_spec.get('description', '')}</description>"
+        self._tool_spec["description"] = (
+            f"IMPORTANT: This StructuredOutputTool should only be invoked as the last and final tool before returning the completed result to the caller. <description>{self._tool_spec.get('description', '')}</description>"
+        )
         self._tool_name = self._tool_spec.get("name", "StructuredOutputTool")
 
     @classmethod
@@ -105,20 +107,20 @@ class StructuredOutputTool(AgentTool):
         try:
             # Attempt to create and validate the Pydantic object
             validated_object = self._structured_output_type(**tool_input)
-            
+
             logger.debug("tool_name=<%s> | structured output validated", self._tool_name)
-            
+
             # Store in invocation state with namespaced key
             key = f"{BASE_KEY}_{tool_use_id}"
             invocation_state[key] = validated_object
-            
+
             # Create clean success result
             result: ToolResult = {
                 "toolUseId": tool_use_id,
                 "status": "success",
                 "content": [{"text": f"Successfully validated {self._tool_name} structured output"}],
             }
-            
+
             yield ToolResultEvent(result)
 
         except ValidationError as e:
@@ -126,24 +128,23 @@ class StructuredOutputTool(AgentTool):
             for error in e.errors():
                 field_path = " -> ".join(str(loc) for loc in error["loc"]) if error["loc"] else "root"
                 error_details.append(f"Field '{field_path}': {error['msg']}")
-            
-            error_message = (
-                f"Validation failed for {self._tool_name}. Please fix the following errors:\n" +
-                "\n".join(f"- {detail}" for detail in error_details)
+
+            error_message = f"Validation failed for {self._tool_name}. Please fix the following errors:\n" + "\n".join(
+                f"- {detail}" for detail in error_details
             )
             logger.error(
                 "tool_name=<%s> | structured output validation failed | error_message=<%s>",
                 self._tool_name,
                 error_message,
             )
-            
+
             # Create error result that will be sent back to the LLM so it can decide if it needs to retry
             result: ToolResult = {
                 "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [{"text": error_message}],
             }
-            
+
             yield ToolResultEvent(result)
 
         except Exception as e:
@@ -151,11 +152,11 @@ class StructuredOutputTool(AgentTool):
             invocation_state.pop(key, None)
             error_message = f"Unexpected error validating {self._tool_name}: {str(e)}"
             logger.exception(error_message)
-            
+
             result: ToolResult = {
                 "toolUseId": tool_use_id,
-                "status": "error", 
+                "status": "error",
                 "content": [{"text": error_message}],
             }
-            
+
             yield ToolResultEvent(result)

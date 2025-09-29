@@ -12,11 +12,11 @@ def resolve_output_schema(
     output_mode: Optional[OutputMode] = None,
 ) -> Optional[OutputSchema]:
     """Resolve output type and mode into OutputSchema.
-    
+
     Args:
         structured_output_type: Output type specification
         output_mode: Output mode (defaults to ToolMode if not specified)
-        
+
     Returns:
         Resolved OutputSchema or None if no output type specified
     """

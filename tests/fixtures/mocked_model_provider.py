@@ -56,9 +56,9 @@ class MockedModelProvider(Model):
         pass
 
     async def stream(
-        self, 
-        messages: Messages, 
-        tool_specs: Optional[list[ToolSpec]] = None, 
+        self,
+        messages: Messages,
+        tool_specs: Optional[list[ToolSpec]] = None,
         system_prompt: Optional[str] = None,
         tool_choice: Optional[Any] = None,
         **kwargs: Any,

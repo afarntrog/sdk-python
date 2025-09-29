@@ -470,4 +470,3 @@ class OpenAIModel(Model):
             yield {"output": parsed}
         else:
             raise ValueError("No valid tool use or tool use input was found in the OpenAI response.")
-

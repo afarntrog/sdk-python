@@ -154,7 +154,9 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
             tool_choice = invocation_state.get("tool_choice")
 
             try:
-                async for event in stream_messages(agent.model, agent.system_prompt, agent.messages, tool_specs, tool_choice):
+                async for event in stream_messages(
+                    agent.model, agent.system_prompt, agent.messages, tool_specs, tool_choice
+                ):
                     if not isinstance(event, ModelStopReason):
                         yield event
 
@@ -289,14 +291,20 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
 
     # Force structured output tool call if LLM didn't use it automatically
     if output_schema and stop_reason != "tool_use":
-        invocation_state.setdefault("_structured_output_attempts", 0)        
+        invocation_state.setdefault("_structured_output_attempts", 0)
         if invocation_state["_structured_output_attempts"] >= _MAX_STRUCTURED_OUTPUT_ATTEMPTS:
-            logger.warning(f"Structured output forcing exceeded maximum attempts ({_MAX_STRUCTURED_OUTPUT_ATTEMPTS}), returning without structured output")
-            yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
+            logger.warning(
+                f"Structured output forcing exceeded maximum attempts ({_MAX_STRUCTURED_OUTPUT_ATTEMPTS}), returning without structured output"
+            )
+            yield EventLoopStopEvent(
+                stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None
+            )
             return
 
         invocation_state["_structured_output_attempts"] += 1
-        logger.debug(f"Forcing structured output tool, attempt {invocation_state['_structured_output_attempts']}/{_MAX_STRUCTURED_OUTPUT_ATTEMPTS}")
+        logger.debug(
+            f"Forcing structured output tool, attempt {invocation_state['_structured_output_attempts']}/{_MAX_STRUCTURED_OUTPUT_ATTEMPTS}"
+        )
 
         forced_invocation_state = invocation_state.copy()
         forced_invocation_state["tool_choice"] = {"any": {}}
@@ -376,7 +384,9 @@ async def _handle_tool_execution(
     validate_and_prepare_tools(message, tool_uses, tool_results, invalid_tool_use_ids)
     tool_uses = [tool_use for tool_use in tool_uses if tool_use.get("toolUseId") not in invalid_tool_use_ids]
     if not tool_uses:
-        yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None)
+        yield EventLoopStopEvent(
+            stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], None
+        )
         return
 
     tool_events = agent.tool_executor._execute(
@@ -410,7 +420,9 @@ async def _handle_tool_execution(
 
     if invocation_state["request_state"].get("stop_event_loop", False):
         agent.event_loop_metrics.end_cycle(cycle_start_time, cycle_trace)
-        yield EventLoopStopEvent(stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], structured_output_result)
+        yield EventLoopStopEvent(
+            stop_reason, message, agent.event_loop_metrics, invocation_state["request_state"], structured_output_result
+        )
         return
 
     events = recurse_event_loop(agent=agent, invocation_state=invocation_state)

@@ -16,10 +16,10 @@ class OutputMode(ABC):
     @abstractmethod
     def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Convert output type to tool specifications.
-        
+
         Args:
             structured_output_type: Pydantic model type to convert
-            
+
         Returns:
             List of tool specifications for the output type
         """
@@ -28,10 +28,10 @@ class OutputMode(ABC):
     @abstractmethod
     def is_supported_by_model(self, model: "Model") -> bool:
         """Check if this output mode is supported by the given model.
-        
+
         Args:
             model: Model instance to check support for
-            
+
         Returns:
             True if the model supports this output mode
         """
@@ -47,7 +47,7 @@ class OutputSchema:
         mode: Optional[OutputMode] = None,
     ):
         """Initialize output schema.
-        
+
         Args:
             type: Pydantic model type for structured output
             mode: Output mode to use (defaults to ToolMode)
@@ -55,5 +55,6 @@ class OutputSchema:
         self.type = type
         if mode is None:
             from .modes import ToolMode
+
             mode = ToolMode()
         self.mode = mode

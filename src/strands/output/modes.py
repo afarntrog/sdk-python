@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 class ToolMode(OutputMode):
     """Use function calling for structured output (DEFAULT).
-    
+
     This is the most reliable approach across all model providers and ensures
     consistent behavior regardless of model capabilities.
     """
@@ -24,10 +24,10 @@ class ToolMode(OutputMode):
 
     def get_tool_instances(self, structured_output_type: Type[BaseModel]) -> list["StructuredOutputTool"]:
         """Create actual tool instances for structured output.
-        
+
         Args:
             structured_output_type: The Pydantic model class to create tools for.
-            
+
         Returns:
             List containing a single StructuredOutputTool instance.
         """
@@ -40,7 +40,7 @@ class ToolMode(OutputMode):
 
 class NativeMode(OutputMode):
     """Use model's native structured output capabilities.
-    
+
     Only use when explicitly requested and supported by the model.
     Falls back to ToolMode if not supported.
     """
@@ -56,14 +56,14 @@ class NativeMode(OutputMode):
 
 class PromptMode(OutputMode):
     """Use prompting to guide output format.
-    
+
     Only use when explicitly requested. Less reliable than tool-based approach
     but can work with models that have limited function calling support.
     """
 
     def __init__(self, template: Optional[str] = None):
         """Initialize with optional custom template.
-        
+
         Args:
             template: Custom template for prompting (uses default if None)
         """
