@@ -150,7 +150,7 @@ class ToolExecutor(abc.ABC):
             tool_results.append(after_event.result)
 
         except Exception as e:
-            logger.exception("tool_name=<%s> | failed to process tool", tool_name) # This is the part where the tool be returned to the LLM with an error message.
+            logger.exception("tool_name=<%s> | failed to process tool", tool_name)
             error_result: ToolResult = {
                 "toolUseId": str(tool_use.get("toolUseId")),
                 "status": "error",

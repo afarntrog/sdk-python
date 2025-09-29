@@ -105,7 +105,7 @@ class StructuredOutputHandler:
         """
         keys_to_remove = [
             key for key in invocation_state.keys() 
-            if key.startswith("structured_output_") and key != "_structured_output_attempts"
+            if key.startswith("_structured_output") and key != "_structured_output_attempts"
         ]
         for key in keys_to_remove:
             del invocation_state[key]
