@@ -302,31 +302,6 @@ def convert_pydantic_to_tool_spec(
     )
 
 
-
-
-
-def get_enhanced_tool_description(model: Type[BaseModel], base_description: Optional[str] = None) -> str:
-    """Get enhanced description for a tool based on the model.
-    
-    Args:
-        model: The Pydantic model class
-        base_description: Optional base description to enhance
-        
-    Returns:
-        Enhanced description string
-    """
-    model_doc = model.__doc__.strip() if model.__doc__ else ""
-    
-    if base_description and model_doc:
-        return f"{base_description}. {model_doc}"
-    elif model_doc:
-        return model_doc
-    elif base_description:
-        return base_description
-    else:
-        return f"Structured output tool for {model.__name__}"
-
-
 def _expand_nested_properties(schema: Dict[str, Any], model: Type[BaseModel]) -> None:
     """Expand the properties of nested models in the schema to include their full structure.
 

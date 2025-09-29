@@ -15,7 +15,6 @@ import logging
 import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import (
-    TYPE_CHECKING,
     Any,
     AsyncGenerator,
     AsyncIterator,
@@ -46,7 +45,7 @@ from ..models.bedrock import BedrockModel
 from ..models.model import Model
 from ..output.base import OutputSchema
 from ..output.modes import ToolMode
-from ..output.registry import OutputRegistry
+from ..output.utils import resolve_output_schema
 from ..session.session_manager import SessionManager
 from ..telemetry.metrics import EventLoopMetrics
 from ..telemetry.tracer import get_tracer, serialize
@@ -66,7 +65,6 @@ from .conversation_manager import (
     SlidingWindowConversationManager,
 )
 from .state import AgentState
-
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +250,8 @@ class Agent:
             system_prompt: System prompt to guide model behavior.
                 If None, the model will behave according to its default settings.
             structured_output_type: Pydantic model type(s) for structured output.
-                When specified, agent calls will return structured output of this type.
+                When specified, all agent calls will attemtp to return structured output of this type.
+                This can be overridden on the agent invocation.
                 Defaults to None (no structured output).
             callback_handler: Callback for processing events as they happen during agent execution.
                 If not provided (using the default), a new PrintingCallbackHandler instance is created.
@@ -284,8 +283,7 @@ class Agent:
         self.model = BedrockModel() if not model else BedrockModel(model_id=model) if isinstance(model, str) else model
         self.messages = messages if messages is not None else []
         self.system_prompt = system_prompt
-        self.output_registry = OutputRegistry()
-        self.default_output_schema = self.output_registry.resolve_output_schema(structured_output_type)
+        self.default_output_schema = resolve_output_schema(structured_output_type)
         self.agent_id = _identifier.validate(agent_id or _DEFAULT_AGENT_ID, _identifier.Identifier.AGENT)
         self.name = name or _DEFAULT_AGENT_NAME
         self.description = description
@@ -597,8 +595,8 @@ class Agent:
         """
         callback_handler = kwargs.get("callback_handler", self.callback_handler)
 
-        # Resolve output schema (runtime override or agent default) TODO consider allowing for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `structured_output_type` on the `output_mode`
-        output_schema: Optional[OutputSchema] = self.output_registry.resolve_output_schema(structured_output_type) or self.default_output_schema
+        # Resolve output schema (runtime override or agent default) TODO in the future, when we expose 'output_schema, we should consider allowing for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `structured_output_type` on the `output_mode`
+        output_schema: Optional[OutputSchema] = resolve_output_schema(structured_output_type) or self.default_output_schema
 
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)
@@ -684,8 +682,7 @@ class Agent:
         output_schema: OutputSchema = invocation_state.get("output_schema")
 
         if output_schema and isinstance(output_schema.mode, ToolMode):
-            structured_output_tools = output_schema.mode.get_tool_instances(output_schema.type)
-            for tool_instance in structured_output_tools:
+            for tool_instance in output_schema.mode.get_tool_instances(output_schema.type):
                 self.tool_registry.register_dynamic_tool(tool_instance)
 
         try:

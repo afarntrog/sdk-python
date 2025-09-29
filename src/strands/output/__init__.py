@@ -2,7 +2,7 @@
 
 from .base import OutputMode, OutputSchema
 from .modes import ToolMode, NativeMode, PromptMode
-from .registry import OutputRegistry
+from .utils import resolve_output_schema
 
 __all__ = [
     "OutputMode",
@@ -10,5 +10,5 @@ __all__ = [
     "ToolMode",
     "NativeMode",
     "PromptMode",
-    "OutputRegistry",
+    "resolve_output_schema",
 ]
