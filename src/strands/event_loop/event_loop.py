@@ -295,6 +295,10 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
             )
             return
 
+        agent.messages.append({
+            "role": "user", 
+            "content": [{"text": "You must format the previous response as structured output."}]
+        })
         invocation_state["_structured_output_attempts"] += 1
         logger.debug(
             f"Forcing structured output tool, attempt {invocation_state['_structured_output_attempts']}/{_MAX_STRUCTURED_OUTPUT_ATTEMPTS}"
