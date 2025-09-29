@@ -6,6 +6,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
 from ...types.tools import ToolUse
+from .structured_output_tool import BASE_KEY
 
 if TYPE_CHECKING:
     from ...output.base import OutputSchema
@@ -18,12 +19,12 @@ class StructuredOutputHandler:
     
     This class manages the lifecycle of structured output tools, including:
     - Tracking expected tool names from output schemas
-    - Managing state storage using namespaced keys (structured_output_{tool_use_id})
+    - Managing state storage using namespaced keys ({BASE_KEY}_{tool_use_id})
     - Extracting and cleaning up structured output results
     
     State Management Approach:
         Each structured output result is stored in the invocation_state using a key pattern:
-        "structured_output_{tool_use_id}" where tool_use_id is the unique identifier for 
+        "{BASE_KEY}_{tool_use_id}" where tool_use_id is the unique identifier for 
         each tool execution. This prevents collisions and allows for targeted cleanup.
         
         The handler maintains a set of expected_tool_names based on the output_schema
@@ -38,13 +39,10 @@ class StructuredOutputHandler:
                           If None, no structured output tools are expected.
         """
         self.output_schema: Optional["OutputSchema"] = output_schema
-        self.expected_tool_names: set[str]
-        
+        self.expected_tool_names: set[str] = set()
+
         if output_schema:
-            tool_specs = output_schema.mode.get_tool_specs(output_schema.type)
-            self.expected_tool_names = {spec["name"] for spec in tool_specs}
-        else:
-            self.expected_tool_names = set()
+            self.expected_tool_names = {spec["name"] for spec in output_schema.mode.get_tool_specs(output_schema.type)}
 
     def has_structured_output_tools(self, tool_uses: list[ToolUse]) -> bool:
         """Check if any tool uses are for structured output tools.
@@ -68,7 +66,7 @@ class StructuredOutputHandler:
         removed from state during extraction to prevent memory leaks.
         
         State Key Pattern:
-            Results are stored with keys: "structured_output_{tool_use_id}"
+            Results are stored with keys: "{BASE_KEY}_{tool_use_id}"
         
         Args:
             invocation_state: Dictionary containing tool execution state and results.
@@ -84,7 +82,7 @@ class StructuredOutputHandler:
         for tool_use in tool_uses:
             if tool_use.get("name") in self.expected_tool_names:
                 tool_use_id = str(tool_use.get("toolUseId", ""))
-                key = f"structured_output_{tool_use_id}"
+                key = f"{BASE_KEY}_{tool_use_id}"
                 result = invocation_state.pop(key, None)
                 if result is not None:
                     logger.debug(f"Extracted structured output for {tool_use.get('name')}")
@@ -105,7 +103,7 @@ class StructuredOutputHandler:
         """
         keys_to_remove = [
             key for key in invocation_state.keys() 
-            if key.startswith("_structured_output") and key != "_structured_output_attempts"
+            if key.startswith(BASE_KEY) and key != "_structured_output_attempts"
         ]
         for key in keys_to_remove:
             del invocation_state[key]

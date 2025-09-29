@@ -17,6 +17,8 @@ from .structured_output_utils import convert_pydantic_to_tool_spec
 
 logger = logging.getLogger(__name__)
 
+BASE_KEY = "_structured_output"
+
 _TOOL_SPEC_CACHE: dict[Type[BaseModel], ToolSpec] = {}
 
 
@@ -107,7 +109,7 @@ class StructuredOutputTool(AgentTool):
             logger.debug("tool_name=<%s> | structured output validated", self._tool_name)
             
             # Store in invocation state with namespaced key
-            key = f"structured_output_{tool_use_id}"
+            key = f"{BASE_KEY}_{tool_use_id}"
             invocation_state[key] = validated_object
             
             # Create clean success result
@@ -145,7 +147,7 @@ class StructuredOutputTool(AgentTool):
             yield ToolResultEvent(result)
 
         except Exception as e:
-            key = f"structured_output_{tool_use_id}"
+            key = f"{BASE_KEY}_{tool_use_id}"
             invocation_state.pop(key, None)
             error_message = f"Unexpected error validating {self._tool_name}: {str(e)}"
             logger.exception(error_message)
