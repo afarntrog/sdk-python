@@ -17,13 +17,7 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 from opentelemetry import trace as trace_api
 
 
-from ..experimental.hooks import (
-    AfterModelInvocationEvent,
-    BeforeModelInvocationEvent,
-)
-from ..hooks import (
-    MessageAddedEvent,
-)
+from ..hooks import AfterModelCallEvent, BeforeModelCallEvent, MessageAddedEvent
 from ..output.modes import NativeMode
 from ..telemetry.metrics import Trace
 from ..telemetry.tracer import get_tracer
@@ -141,7 +135,7 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
         )
         with trace_api.use_span(model_invoke_span):
             agent.hooks.invoke_callbacks(
-                BeforeModelInvocationEvent(
+                BeforeModelCallEvent(
                     agent=agent,
                 )
             )
@@ -164,9 +158,9 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
                 invocation_state.setdefault("request_state", {})
 
                 agent.hooks.invoke_callbacks(
-                    AfterModelInvocationEvent(
+                    AfterModelCallEvent(
                         agent=agent,
-                        stop_response=AfterModelInvocationEvent.ModelStopResponse(
+                        stop_response=AfterModelCallEvent.ModelStopResponse(
                             stop_reason=stop_reason,
                             message=message,
                         ),
@@ -185,7 +179,7 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
                     tracer.end_span_with_error(model_invoke_span, str(e), e)
 
                 agent.hooks.invoke_callbacks(
-                    AfterModelInvocationEvent(
+                    AfterModelCallEvent(
                         agent=agent,
                         exception=e,
                     )
