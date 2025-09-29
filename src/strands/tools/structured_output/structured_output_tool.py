@@ -105,7 +105,6 @@ class StructuredOutputTool(AgentTool):
         tool_use_id = str(tool_use.get("toolUseId", ""))
 
         try:
-            # Attempt to create and validate the Pydantic object
             validated_object = self._structured_output_type(**tool_input)
 
             logger.debug("tool_name=<%s> | structured output validated", self._tool_name)
@@ -114,7 +113,6 @@ class StructuredOutputTool(AgentTool):
             key = f"{BASE_KEY}_{tool_use_id}"
             invocation_state[key] = validated_object
 
-            # Create clean success result
             result: ToolResult = {
                 "toolUseId": tool_use_id,
                 "status": "success",
