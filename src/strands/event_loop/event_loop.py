@@ -280,8 +280,8 @@ async def event_loop_cycle(agent: "Agent", invocation_state: dict[str, Any]) -> 
         raise EventLoopException(e, invocation_state["request_state"]) from e
     finally:
         if output_schema:
-            hanlder = StructuredOutputHandler(output_schema)
-            hanlder.cleanup_all_state(invocation_state)
+            handler = StructuredOutputHandler(output_schema)
+            handler.cleanup_all_state(invocation_state)
 
     # Force structured output tool call if LLM didn't use it automatically
     if output_schema and stop_reason != "tool_use":

@@ -250,7 +250,7 @@ class Agent:
             system_prompt: System prompt to guide model behavior.
                 If None, the model will behave according to its default settings.
             structured_output_type: Pydantic model type(s) for structured output.
-                When specified, all agent calls will attemtp to return structured output of this type.
+                When specified, all agent calls will attempt to return structured output of this type.
                 This can be overridden on the agent invocation.
                 Defaults to None (no structured output).
             callback_handler: Callback for processing events as they happen during agent execution.
