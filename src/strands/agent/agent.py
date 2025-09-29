@@ -31,8 +31,6 @@ from typing_extensions import deprecated
 from opentelemetry import trace as trace_api
 from pydantic import BaseModel
 
-from strands.output.modes import NativeMode, ToolMode
-
 from .. import _identifier
 from ..event_loop.event_loop import event_loop_cycle
 from ..handlers.callback_handler import PrintingCallbackHandler, null_callback_handler
@@ -47,7 +45,7 @@ from ..hooks import (
 from ..models.bedrock import BedrockModel
 from ..models.model import Model
 from ..output.base import OutputSchema
-from ..output.base import OutputMode
+from ..output.modes import ToolMode
 from ..output.registry import OutputRegistry
 from ..session.session_manager import SessionManager
 from ..telemetry.metrics import EventLoopMetrics
@@ -451,9 +449,7 @@ class Agent:
                 - metrics: Performance metrics from the event loop
                 - state: The final state of the event loop
         """
-        output_schema_from_kwargs = kwargs.pop('output_schema', None)
-        output_schema: Optional[OutputSchema] = output_schema_from_kwargs or self.output_registry.resolve_output_schema(structured_output_type) or self.default_output_schema
-        events = self.stream_async(prompt, output_schema=output_schema, **kwargs)
+        events = self.stream_async(prompt, structured_output_type=structured_output_type, **kwargs)
         async for event in events:
             _ = event
 
@@ -561,7 +557,6 @@ class Agent:
         self,
         prompt: AgentInput = None,
         structured_output_type: Optional[Type[BaseModel]] = None,
-        output_schema: Optional[OutputSchema] = None,
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
         """Process a natural language prompt and yield events as an async iterator.
@@ -579,7 +574,6 @@ class Agent:
                 - list[Message]: Complete messages with roles
                 - None: Use existing conversation history
             structured_output_type: Pydantic model type(s) for structured output (overrides agent default).
-            output_schema: Pre-resolved output schema (takes precedence over structured_output_type).
             **kwargs: Additional parameters to pass to the event loop.
 
         Yields:
@@ -603,9 +597,8 @@ class Agent:
         """
         callback_handler = kwargs.get("callback_handler", self.callback_handler)
 
-        # Resolve output schema (runtime override or agent default) TODO we should allow for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `structured_output_type` on the `output_mode`
-        if output_schema is None:
-            output_schema = self.output_registry.resolve_output_schema(structured_output_type) or self.default_output_schema
+        # Resolve output schema (runtime override or agent default) TODO consider allowing for halfway configuration. for example, the user should be able to define `output_mode` on the Agent level but `structured_output_type` on the `output_mode`
+        output_schema: Optional[OutputSchema] = self.output_registry.resolve_output_schema(structured_output_type) or self.default_output_schema
 
         # Process input and get message to add (if any)
         messages = self._convert_prompt_to_messages(prompt)
@@ -690,13 +683,10 @@ class Agent:
         invocation_state["agent"] = self
         output_schema: OutputSchema = invocation_state.get("output_schema")
 
-        if output_schema:
-            from ..output.modes import ToolMode
-            if isinstance(output_schema.mode, ToolMode):
-                structured_output_tool_instances = output_schema.mode.get_tool_instances(output_schema.type)
-                for tool_instance in structured_output_tool_instances:
-                    if not self.tool_registry.get_tool(tool_instance.tool_name):
-                        self.tool_registry.register_dynamic_tool(tool_instance)
+        if output_schema and isinstance(output_schema.mode, ToolMode):
+            structured_output_tools = output_schema.mode.get_tool_instances(output_schema.type)
+            for tool_instance in structured_output_tools:
+                self.tool_registry.register_dynamic_tool(tool_instance)
 
         try:
             # Execute the main event loop cycle

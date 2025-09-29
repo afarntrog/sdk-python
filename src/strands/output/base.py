@@ -26,18 +26,6 @@ class OutputMode(ABC):
         pass
 
     @abstractmethod
-    def extract_result(self, model_response: Any) -> Any:
-        """Extract structured result from model response.
-        
-        Args:
-            model_response: Raw response from the model
-            
-        Returns:
-            Extracted structured output
-        """
-        pass
-
-    @abstractmethod
     def is_supported_by_model(self, model: "Model") -> bool:
         """Check if this output mode is supported by the given model.
         

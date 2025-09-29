@@ -515,26 +515,6 @@ class ToolRegistry:
             del self.dynamic_tools[tool_name]
             logger.debug(f"Unregistered dynamic tool: {tool_name}")
 
-    def clear_dynamic_tools(self) -> None:
-        """Clear all dynamically registered tools."""
-        count = len(self.dynamic_tools)
-        self.dynamic_tools.clear()
-        logger.debug(f"Cleared {count} dynamic tools")
-
-    def get_tool(self, tool_name: str) -> Optional[AgentTool]:
-        """Get a tool by name, checking both regular and dynamic tools.
-        
-        Args:
-            tool_name: Name of the tool to retrieve
-            
-        Returns:
-            The tool if found, None otherwise
-        """
-        # Check regular tools first
-        tool = self.registry.get(tool_name)
-        if tool:
-            return tool
-        return self.dynamic_tools.get(tool_name)
 
     def validate_tool_spec(self, tool_spec: ToolSpec) -> None:
         """Validate tool specification against required schema.

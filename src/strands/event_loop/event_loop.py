@@ -343,33 +343,6 @@ async def recurse_event_loop(agent: "Agent", invocation_state: dict[str, Any]) -
     recursive_trace.end()
 
 
-def _create_and_process_tool_result_message(
-    agent: "Agent",
-    tool_results: list[ToolResult],
-) -> Message:
-    """Create and process a tool result message for conversation history.
-    
-    Formats tool results into a user message, adds it to the agent's conversation
-    history, and triggers any registered callbacks for message addition events.
-    
-    Args:
-        agent: The agent to add the message to.
-        tool_results: List of tool results to include in the message.
-        
-    Returns:
-        The formatted message containing the tool results.
-    """
-    tool_result_message: Message = {
-        "role": "user",
-        "content": [{"toolResult": result} for result in tool_results],
-    }
-
-    agent.messages.append(tool_result_message)
-    agent.hooks.invoke_callbacks(MessageAddedEvent(agent=agent, message=tool_result_message))
-
-    return tool_result_message
-
-
 async def _handle_tool_execution(
     stop_reason: StopReason,
     message: Message,
@@ -421,7 +394,6 @@ async def _handle_tool_execution(
 
     invocation_state["event_loop_parent_cycle_id"] = invocation_state["event_loop_cycle_id"]
 
-    # tool_result_message = _create_and_process_tool_result_message(agent, tool_results)
     tool_result_message: Message = {
         "role": "user",
         "content": [{"toolResult": result} for result in tool_results],

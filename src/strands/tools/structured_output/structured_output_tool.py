@@ -21,11 +21,7 @@ _TOOL_SPEC_CACHE: dict[Type[BaseModel], ToolSpec] = {}
 
 
 class StructuredOutputTool(AgentTool):
-    """Tool implementation for structured output validation.
-    
-    This class converts structured output from a "pseudo-tool" into a real tool
-    that can leverage the existing error handling and retry infrastructure.
-    """
+    """Tool implementation for structured output validation."""
 
     def __init__(self, structured_output_type: Type[BaseModel]) -> None:
         """Initialize a structured output tool.
@@ -36,6 +32,7 @@ class StructuredOutputTool(AgentTool):
         super().__init__()
         self._structured_output_type = structured_output_type
         self._tool_spec = self._get_tool_spec(structured_output_type)
+        self._tool_spec['description'] = f"IMPORTANT: This StructuredOutputTool should only be invoked as the last and final tool before returning the completed result to the caller. <description>{self._tool_spec.get('description', '')}</description>"
         self._tool_name = self._tool_spec.get("name", "StructuredOutputTool")
 
     @classmethod

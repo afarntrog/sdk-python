@@ -33,11 +33,6 @@ class ToolMode(OutputMode):
         """
         return [StructuredOutputTool(structured_output_type)]
 
-    def extract_result(self, model_response: Any) -> Any:
-        """Extract result from tool call response."""
-        # Implementation will be added when integrating with event loop
-        return model_response
-
     def is_supported_by_model(self, model: "Model") -> bool:
         """Tool-based output is supported by all models that support function calling."""
         return True  # All our models support function calling
@@ -52,11 +47,6 @@ class NativeMode(OutputMode):
 
     def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will use native JSON schema instead."""
-        raise NotImplementedError()
-
-    def extract_result(self, model_response: Any) -> Any:
-        """Extract result from native structured output."""
-        # Implementation will be added when integrating with model providers
         raise NotImplementedError()
 
     def is_supported_by_model(self, model: "Model") -> bool:
@@ -81,10 +71,6 @@ class PromptMode(OutputMode):
 
     def get_tool_specs(self, structured_output_type: Type[BaseModel]) -> list["ToolSpec"]:
         """Return empty list - will inject schema into system prompt instead."""
-        raise NotImplementedError()
-
-    def extract_result(self, model_response: Any) -> Any:
-        """Extract result from prompted response."""
         raise NotImplementedError()
 
     def is_supported_by_model(self, model: "Model") -> bool:

@@ -29,7 +29,7 @@ class StructuredOutputHandler:
         The handler maintains a set of expected_tool_names based on the output_schema
         to quickly identify which tool uses are structured output tools.
     """
-    
+
     def __init__(self, output_schema: Optional["OutputSchema"]) -> None:
         """Initialize the structured output handler.
         
@@ -45,7 +45,7 @@ class StructuredOutputHandler:
             self.expected_tool_names = {spec["name"] for spec in tool_specs}
         else:
             self.expected_tool_names = set()
-    
+
     def has_structured_output_tools(self, tool_uses: list[ToolUse]) -> bool:
         """Check if any tool uses are for structured output tools.
         
@@ -59,7 +59,7 @@ class StructuredOutputHandler:
         if not self.expected_tool_names:
             return False
         return any(tool_use.get("name") in self.expected_tool_names for tool_use in tool_uses)
-    
+
     def extract_result(self, invocation_state: dict[str, Any], tool_uses: list[ToolUse]) -> Optional[BaseModel]:
         """Extract and remove structured output result from invocation state.
         
@@ -90,23 +90,7 @@ class StructuredOutputHandler:
                     logger.debug(f"Extracted structured output for {tool_use.get('name')}")
                     return result
         return None
-    
-    def cleanup_state(self, invocation_state: dict[str, Any], tool_use_ids: list[str]) -> None:
-        """Clean up structured output state for specific tool use IDs.
-        
-        Use this method when you need targeted cleanup of specific tool executions,
-        typically after processing their results or when they fail.
-        
-        Args:
-            invocation_state: Dictionary containing tool execution state.
-            tool_use_ids: List of specific tool use IDs to clean up.
-        """
-        for tool_use_id in tool_use_ids:
-            key = f"structured_output_{tool_use_id}"
-            if key in invocation_state:
-                del invocation_state[key]
-                logger.debug(f"Cleaned up structured output for tool_use_id: {tool_use_id}")
-    
+
     def cleanup_all_state(self, invocation_state: dict[str, Any]) -> None:
         """Clean up all structured output state from invocation state.
         
