@@ -1001,7 +1001,12 @@ class Graph(MultiAgentBase):
             agent_results = node_result.get_agent_results()
             for result in agent_results:
                 agent_name = getattr(result, "agent_name", "Agent")
-                result_text = str(result)
+                # Prefer structured_output if available, otherwise fall back to str(result)
+                structured_output = getattr(result, "structured_output", None)
+                if structured_output is not None:
+                    result_text = structured_output.model_dump_json()
+                else:
+                    result_text = str(result)
                 node_input.append(ContentBlock(text=f"  - {agent_name}: {result_text}"))
 
         return node_input
