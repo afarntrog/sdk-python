@@ -113,6 +113,7 @@ class SessionAgent:
         agent_id: Unique id for the agent.
         state: User managed state.
         conversation_manager_state: State for conversation management.
+        state_serializer: Name of the serializer used to persist/restore state.
         created_at: Created at time.
         updated_at: Updated at time.
     """
