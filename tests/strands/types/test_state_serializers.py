@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from strands.types.state_serializers import JsonStateSerializer, PickleStateSerializer
 
 
 def test_json_state_serializer_drops_non_serializable():
     serializer = JsonStateSerializer()
-    state = {"a": 1, "dt": datetime.utcnow()}
+    state = {"a": 1, "dt": datetime.now(timezone.utc)}
 
     serialized = serializer.serialize(state)
 

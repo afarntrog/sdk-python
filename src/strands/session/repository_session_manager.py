@@ -47,10 +47,11 @@ class RepositorySessionManager(SessionManager):
         self.session_repository = session_repository
         self.session_id = session_id
         self.state_serializer = state_serializer or JsonStateSerializer()
-        if not getattr(self.state_serializer, "name", None):
+        serializer_name = getattr(self.state_serializer, "name", "")
+        if not isinstance(serializer_name, str) or not serializer_name.strip():
             raise ValueError("state_serializer.name must be a non-empty string")
         self.state_serializer_registry: dict[str, StateSerializer] = {
-            self.state_serializer.name: self.state_serializer
+            serializer_name: self.state_serializer
         }
         if state_serializer_registry:
             self.state_serializer_registry.update(state_serializer_registry)

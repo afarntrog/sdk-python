@@ -82,9 +82,9 @@ def test_json_serializable_values():
 def test_non_json_values_allowed_by_default():
     """Non-JSON values are allowed when validation is disabled."""
     state = JSONSerializableDict()
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    marker = datetime.utcnow()
+    marker = datetime.now(timezone.utc)
     state.set("obj", marker)
     assert state.get("obj") == marker
 
