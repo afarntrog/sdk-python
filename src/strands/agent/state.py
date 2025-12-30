@@ -4,7 +4,7 @@ Provides flexible state container with pluggable serialization and transient sta
 """
 
 import copy
-from typing import Any, Union
+from typing import Any
 
 from .serializers import JSONSerializer, StateSerializer
 
@@ -45,7 +45,7 @@ class AgentState:
     def __init__(
         self,
         initial_state: dict[str, Any] | None = None,
-        serializer: Union[StateSerializer, None] = None,
+        serializer: StateSerializer | None = None,
     ):
         """Initialize AgentState.
 
