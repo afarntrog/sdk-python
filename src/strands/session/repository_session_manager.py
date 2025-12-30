@@ -7,12 +7,8 @@ from ..agent.state import AgentState
 from ..tools._tool_helpers import generate_missing_tool_result_content
 from ..types.content import Message
 from ..types.exceptions import SessionException
-from ..types.session import (
-    Session,
-    SessionAgent,
-    SessionMessage,
-    SessionType,
-)
+from ..types.session import Session, SessionAgent, SessionMessage, SessionType
+from ..types.state_serializers import JsonStateSerializer, StateSerializer
 from .session_manager import SessionManager
 from .session_repository import SessionRepository
 
@@ -31,6 +27,9 @@ class RepositorySessionManager(SessionManager):
         self,
         session_id: str,
         session_repository: SessionRepository,
+        *,
+        state_serializer: StateSerializer | None = None,
+        state_serializer_registry: dict[str, StateSerializer] | None = None,
         **kwargs: Any,
     ):
         """Initialize the RepositorySessionManager.
@@ -47,6 +46,12 @@ class RepositorySessionManager(SessionManager):
         """
         self.session_repository = session_repository
         self.session_id = session_id
+        self.state_serializer = state_serializer or JsonStateSerializer()
+        self.state_serializer_registry: dict[str, StateSerializer] = {
+            self.state_serializer.name: self.state_serializer
+        }
+        if state_serializer_registry:
+            self.state_serializer_registry.update(state_serializer_registry)
         session = session_repository.read_session(session_id)
         # Create a session if it does not exist yet
         if session is None:
@@ -101,7 +106,7 @@ class RepositorySessionManager(SessionManager):
         """
         self.session_repository.update_agent(
             self.session_id,
-            SessionAgent.from_agent(agent),
+            SessionAgent.from_agent(agent, self.state_serializer),
         )
 
     def initialize(self, agent: "Agent", **kwargs: Any) -> None:
@@ -124,7 +129,7 @@ class RepositorySessionManager(SessionManager):
                 self.session_id,
             )
 
-            session_agent = SessionAgent.from_agent(agent)
+            session_agent = SessionAgent.from_agent(agent, self.state_serializer)
             self.session_repository.create_agent(self.session_id, session_agent)
             # Initialize messages with sequential indices
             session_message = None
@@ -138,7 +143,9 @@ class RepositorySessionManager(SessionManager):
                 agent.agent_id,
                 self.session_id,
             )
-            agent.state = AgentState(session_agent.state)
+            serializer_name = session_agent.state_serializer or self.state_serializer.name
+            serializer = self.state_serializer_registry.get(serializer_name, self.state_serializer)
+            agent.state = AgentState(serializer.deserialize(session_agent.state))
 
             session_agent.initialize_internal_state(agent)
 
@@ -271,7 +278,7 @@ class RepositorySessionManager(SessionManager):
                 self.session_id,
             )
 
-            session_agent = SessionAgent.from_bidi_agent(agent)
+            session_agent = SessionAgent.from_bidi_agent(agent, self.state_serializer)
             self.session_repository.create_agent(self.session_id, session_agent)
             # Initialize messages with sequential indices
             session_message = None
@@ -285,7 +292,9 @@ class RepositorySessionManager(SessionManager):
                 agent.agent_id,
                 self.session_id,
             )
-            agent.state = AgentState(session_agent.state)
+            serializer_name = session_agent.state_serializer or self.state_serializer.name
+            serializer = self.state_serializer_registry.get(serializer_name, self.state_serializer)
+            agent.state = AgentState(serializer.deserialize(session_agent.state))
 
             session_agent.initialize_bidi_internal_state(agent)
 
@@ -332,5 +341,5 @@ class RepositorySessionManager(SessionManager):
         """
         self.session_repository.update_agent(
             self.session_id,
-            SessionAgent.from_bidi_agent(agent),
+            SessionAgent.from_bidi_agent(agent, self.state_serializer),
         )

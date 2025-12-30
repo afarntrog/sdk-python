@@ -1,4 +1,4 @@
-"""JSON serializable dictionary utilities."""
+"""Agent state dictionary utilities."""
 
 import copy
 import json
@@ -6,17 +6,21 @@ from typing import Any
 
 
 class JSONSerializableDict:
-    """A key-value store with JSON serialization validation.
+    """A key-value store with optional JSON serialization validation.
 
-    Provides a dict-like interface with automatic validation that all values
-    are JSON serializable on assignment.
+    Provides a dict-like interface with optional validation that all values
+    are JSON serializable on assignment. By default validation is disabled to
+    allow arbitrary Python objects in agent state; enable validation when
+    explicitly needed.
     """
 
-    def __init__(self, initial_state: dict[str, Any] | None = None):
+    def __init__(self, initial_state: dict[str, Any] | None = None, *, validate_json: bool = False):
         """Initialize JSONSerializableDict."""
         self._data: dict[str, Any]
+        self._validate_on_set = validate_json
         if initial_state:
-            self._validate_json_serializable(initial_state)
+            if validate_json:
+                self._validate_json_serializable(initial_state)
             self._data = copy.deepcopy(initial_state)
         else:
             self._data = {}
@@ -32,7 +36,8 @@ class JSONSerializableDict:
             ValueError: If key is invalid, or if value is not JSON serializable
         """
         self._validate_key(key)
-        self._validate_json_serializable(value)
+        if self._validate_on_set:
+            self._validate_json_serializable(value)
         self._data[key] = copy.deepcopy(value)
 
     def get(self, key: str | None = None) -> Any:

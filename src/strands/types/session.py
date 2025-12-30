@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from ..interrupt import _InterruptState
 from .content import Message
+from .state_serializers import StateSerializer, JsonStateSerializer
 
 if TYPE_CHECKING:
     from ..agent.agent import Agent
@@ -119,26 +120,29 @@ class SessionAgent:
     agent_id: str
     state: dict[str, Any]
     conversation_manager_state: dict[str, Any]
+    state_serializer: str | None = None
     _internal_state: dict[str, Any] = field(default_factory=dict)  # Strands managed state
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @classmethod
-    def from_agent(cls, agent: "Agent") -> "SessionAgent":
+    def from_agent(cls, agent: "Agent", state_serializer: StateSerializer | None = None) -> "SessionAgent":
         """Convert an Agent to a SessionAgent."""
         if agent.agent_id is None:
             raise ValueError("agent_id needs to be defined.")
+        serializer = state_serializer or JsonStateSerializer()
         return cls(
             agent_id=agent.agent_id,
             conversation_manager_state=agent.conversation_manager.get_state(),
-            state=agent.state.get(),
+            state=serializer.serialize(agent.state.get()),
+            state_serializer=serializer.name,
             _internal_state={
                 "interrupt_state": agent._interrupt_state.to_dict(),
             },
         )
 
     @classmethod
-    def from_bidi_agent(cls, agent: "BidiAgent") -> "SessionAgent":
+    def from_bidi_agent(cls, agent: "BidiAgent", state_serializer: StateSerializer | None = None) -> "SessionAgent":
         """Convert a BidiAgent to a SessionAgent.
 
         Args:
@@ -149,6 +153,7 @@ class SessionAgent:
         """
         if agent.agent_id is None:
             raise ValueError("agent_id needs to be defined.")
+        serializer = state_serializer or JsonStateSerializer()
 
         # BidiAgent doesn't have _interrupt_state yet, so we use empty dict for internal state
         internal_state = {}
@@ -158,7 +163,8 @@ class SessionAgent:
         return cls(
             agent_id=agent.agent_id,
             conversation_manager_state={},  # BidiAgent has no conversation_manager
-            state=agent.state.get(),
+            state=serializer.serialize(agent.state.get()),
+            state_serializer=serializer.name,
             _internal_state=internal_state,
         )
 

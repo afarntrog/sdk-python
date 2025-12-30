@@ -166,8 +166,10 @@ class Agent:
                 Defaults to "Strands Agents".
             description: description of what the Agent does
                 Defaults to None.
-            state: stateful information for the agent. Can be either an AgentState object, or a json serializable dict.
-                Defaults to an empty AgentState object.
+            state: stateful information for the agent. Can be either an AgentState object, or a dict.
+                Values are not required to be JSON-serializable; persistence depends on the configured
+                state serializer (default JSON will drop non-serializable entries). Defaults to an empty
+                AgentState object.
             hooks: hooks to be added to the agent hook registry
                 Defaults to None.
             session_manager: Manager for handling agent sessions including conversation history and state.

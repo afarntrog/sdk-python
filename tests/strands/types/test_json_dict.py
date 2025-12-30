@@ -38,7 +38,7 @@ def test_initialize_and_get_entire_state():
 
 def test_initialize_with_error():
     with pytest.raises(ValueError, match="not JSON serializable"):
-        JSONSerializableDict({"object", object()})
+        JSONSerializableDict({"object": object()}, validate_json=True)
 
 
 def test_delete():
@@ -61,7 +61,7 @@ def test_delete_nonexistent_key():
 
 def test_json_serializable_values():
     """Test that only JSON-serializable values are accepted."""
-    state = JSONSerializableDict()
+    state = JSONSerializableDict(validate_json=True)
 
     # Valid JSON types
     state.set("string", "test")
@@ -77,6 +77,16 @@ def test_json_serializable_values():
 
     with pytest.raises(ValueError, match="not JSON serializable"):
         state.set("object", object())
+
+
+def test_non_json_values_allowed_by_default():
+    """Non-JSON values are allowed when validation is disabled."""
+    state = JSONSerializableDict()
+    from datetime import datetime
+
+    marker = datetime.utcnow()
+    state.set("obj", marker)
+    assert state.get("obj") == marker
 
 
 def test_key_validation():
