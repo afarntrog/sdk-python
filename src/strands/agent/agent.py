@@ -121,6 +121,7 @@ class Agent:
         name: Optional[str] = None,
         description: Optional[str] = None,
         state: Optional[Union[AgentState, dict]] = None,
+        state_serializer: Optional["StateSerializer"] = None,
         hooks: Optional[list[HookProvider]] = None,
         session_manager: Optional[SessionManager] = None,
         tool_executor: Optional[ToolExecutor] = None,
@@ -170,6 +171,7 @@ class Agent:
                 Values are not required to be JSON-serializable; persistence depends on the configured
                 state serializer (default JSON will drop non-serializable entries). Defaults to an empty
                 AgentState object.
+            state_serializer: Serializer to associate with this agent's state (defaults to JsonStateSerializer).
             hooks: hooks to be added to the agent hook registry
                 Defaults to None.
             session_manager: Manager for handling agent sessions including conversation history and state.
@@ -230,6 +232,11 @@ class Agent:
         self.tracer = get_tracer()
         self.trace_span: Optional[trace_api.Span] = None
 
+        # Configure state serializer
+        from ..types.state_serializers import JsonStateSerializer, StateSerializer  # Local import to avoid cycles
+
+        self.state_serializer: StateSerializer = state_serializer or JsonStateSerializer()
+
         # Initialize agent state management
         if state is not None:
             if isinstance(state, dict):
@@ -240,6 +247,8 @@ class Agent:
                 raise ValueError("state must be an AgentState object or a dict")
         else:
             self.state = AgentState()
+        # Attach serializer metadata to state for downstream consumers
+        setattr(self.state, "_serializer", self.state_serializer)
 
         self.tool_caller = _ToolCaller(self)
 

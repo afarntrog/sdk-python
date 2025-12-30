@@ -5,6 +5,7 @@ import pytest
 from strands import Agent, tool
 from strands.agent.state import AgentState
 from strands.types.content import Messages
+from strands.types.state_serializers import JsonStateSerializer, PickleStateSerializer
 
 from ...fixtures.mocked_model_provider import MockedModelProvider
 
@@ -91,6 +92,14 @@ def test_non_json_values_allowed_by_default():
     marker = datetime.now(timezone.utc)
     state.set("obj", marker)
     assert state.get("obj") == marker
+
+
+def test_agent_state_serializer_default_and_custom():
+    agent_default = Agent()
+    assert isinstance(getattr(agent_default.state, "_serializer", None), JsonStateSerializer)
+
+    agent_pickle = Agent(state_serializer=PickleStateSerializer())
+    assert isinstance(getattr(agent_pickle.state, "_serializer", None), PickleStateSerializer)
 
 
 def test_key_validation():
