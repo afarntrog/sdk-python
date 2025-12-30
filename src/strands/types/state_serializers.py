@@ -48,12 +48,17 @@ class JsonStateSerializer(StateSerializer):
     def deserialize(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Deserialize JSON-friendly dict."""
         if not isinstance(payload, Mapping):
+            logger.debug("state_deserialize_error=<non-mapping> | expected mapping payload for json serializer")
             return {}
         return dict(payload)
 
 
 class PickleStateSerializer(StateSerializer):
-    """Pickle-based serializer for arbitrary Python objects."""
+    """Pickle-based serializer for arbitrary Python objects.
+
+    Warning:
+        Pickle is unsafe for untrusted data. Only use with trusted payloads.
+    """
 
     name = "pickle"
     _SERIALIZER_KEY = "__serializer__"
@@ -67,8 +72,10 @@ class PickleStateSerializer(StateSerializer):
     def deserialize(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Deserialize pickle-based payload."""
         if not isinstance(payload, Mapping):
+            logger.debug("state_deserialize_error=<non-mapping> | expected mapping payload for pickle serializer")
             return {}
         if payload.get(self._SERIALIZER_KEY) != self.name or self._PAYLOAD_KEY not in payload:
+            logger.debug("state_deserialize_error=<invalid-metadata> | missing pickle serializer markers")
             return {}
         try:
             return pickle.loads(base64.b64decode(str(payload[self._PAYLOAD_KEY])))
