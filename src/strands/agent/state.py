@@ -156,18 +156,22 @@ class AgentState:
         persistent_data = {k: v for k, v in self._data.items() if k not in self._transient_keys}
         return self._serializer.serialize(persistent_data)
 
-    def deserialize(self, data: bytes) -> None:
+    def deserialize(self, data: bytes) -> dict[str, Any]:
         """Deserialize persistent state.
 
         Transient keys are preserved if already in memory.
 
         Args:
             data: Serialized state bytes to restore
+
+        Returns:
+            The deserialized state dictionary (excluding transient keys)
         """
         persistent_data = self._serializer.deserialize(data)
         # Keep transient keys in memory, replace persistent
         transient_data = {k: v for k, v in self._data.items() if k in self._transient_keys}
         self._data = {**persistent_data, **transient_data}
+        return persistent_data
 
     def _validate_key(self, key: str) -> None:
         """Validate that a key is valid.
