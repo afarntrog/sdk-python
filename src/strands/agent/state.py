@@ -62,9 +62,8 @@ class AgentState:
         self._data: dict[str, Any]
 
         if initial_state:
-            # Validate initial state if serializer supports validation
-            if hasattr(self._serializer, "validate"):
-                self._serializer.validate(initial_state)
+            # Validate initial state
+            self._serializer.validate(initial_state)
             self._data = copy.deepcopy(initial_state)
         else:
             self._data = {}
@@ -97,14 +96,13 @@ class AgentState:
 
         Raises:
             ValueError: If key is invalid, or if value is not serializable
-                (only when persist=True and serializer has validate method)
+                (only when persist=True)
         """
         self._validate_key(key)
 
         if persist:
-            # Validate serializable if serializer supports validation
-            if hasattr(self._serializer, "validate"):
-                self._serializer.validate(value)
+            # Validate serializable
+            self._serializer.validate(value)
             self._transient_keys.discard(key)
         else:
             # Mark as transient - skip validation

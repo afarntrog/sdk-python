@@ -42,6 +42,19 @@ class StateSerializer(Protocol):
         """
         ...
 
+    def validate(self, value: Any) -> None:
+        """Validate a value can be serialized.
+
+        Serializers that accept any value should implement this as a no-op.
+
+        Args:
+            value: The value to validate
+
+        Raises:
+            ValueError: If value cannot be serialized by this serializer
+        """
+        ...
+
 
 class JSONSerializer:
     """JSON-based state serializer.
@@ -127,3 +140,11 @@ class PickleSerializer:
         """
         result: dict[str, Any] = pickle.loads(data)  # noqa: S301
         return result
+
+    def validate(self, value: Any) -> None:
+        """No-op validation - pickle accepts any Python object.
+
+        Args:
+            value: The value to validate (ignored)
+        """
+        pass
