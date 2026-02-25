@@ -37,13 +37,17 @@ from ..hooks import (
     AfterInvocationEvent,
     AgentInitializedEvent,
     BeforeInvocationEvent,
+    HookCallback,
     HookProvider,
     HookRegistry,
     MessageAddedEvent,
 )
+from ..hooks.registry import TEvent
 from ..interrupt import _InterruptState
 from ..models.bedrock import BedrockModel
 from ..models.model import Model
+from ..plugins import Plugin
+from ..plugins.registry import _PluginRegistry
 from ..session.session_manager import SessionManager
 from ..telemetry.metrics import EventLoopMetrics
 from ..telemetry.tracer import get_tracer, serialize
@@ -54,7 +58,7 @@ from ..tools.registry import ToolRegistry
 from ..tools.structured_output._structured_output_context import StructuredOutputContext
 from ..tools.watcher import ToolWatcher
 from ..types._events import AgentResultEvent, EventLoopStopEvent, InitEventLoopEvent, ModelStreamChunkEvent, TypedEvent
-from ..types.agent import AgentInput
+from ..types.agent import AgentInput, ConcurrentInvocationMode
 from ..types.content import ContentBlock, Message, Messages, SystemContentBlock
 from ..types.exceptions import ConcurrencyException, ContextWindowOverflowException
 from ..types.traces import AttributeValue
@@ -124,11 +128,13 @@ class Agent(AgentBase):
         name: str | None = None,
         description: str | None = None,
         state: AgentState | dict | None = None,
+        plugins: list[Plugin] | None = None,
         hooks: list[HookProvider] | None = None,
         session_manager: SessionManager | None = None,
         structured_output_prompt: str | None = None,
         tool_executor: ToolExecutor | None = None,
         retry_strategy: ModelRetryStrategy | _DefaultRetryStrategySentinel | None = _DEFAULT_RETRY_STRATEGY,
+        concurrent_invocation_mode: ConcurrentInvocationMode = ConcurrentInvocationMode.THROW,
     ):
         """Initialize the Agent with the specified configuration.
 
@@ -173,6 +179,10 @@ class Agent(AgentBase):
                 Defaults to None.
             state: stateful information for the agent. Can be either an AgentState object, or a json serializable dict.
                 Defaults to an empty AgentState object.
+            plugins: List of Plugin instances to extend agent functionality.
+                Plugins are initialized with the agent instance after construction and can register hooks,
+                modify agent attributes, or perform other setup tasks.
+                Defaults to None.
             hooks: hooks to be added to the agent hook registry
                 Defaults to None.
             session_manager: Manager for handling agent sessions including conversation history and state.
@@ -186,6 +196,11 @@ class Agent(AgentBase):
             retry_strategy: Strategy for retrying model calls on throttling or other transient errors.
                 Defaults to ModelRetryStrategy with max_attempts=6, initial_delay=4s, max_delay=240s.
                 Implement a custom HookProvider for custom retry logic, or pass None to disable retries.
+            concurrent_invocation_mode: Mode controlling concurrent invocation behavior.
+                Defaults to "throw" which raises ConcurrencyException if concurrent invocation is attempted.
+                Set to "unsafe_reentrant" to skip lock acquisition entirely, allowing concurrent invocations.
+                Warning: "unsafe_reentrant" makes no guarantees about resulting behavior and is provided
+                only for advanced use cases where the caller understands the risks.
 
         Raises:
             ValueError: If agent id contains path separators.
@@ -257,12 +272,15 @@ class Agent(AgentBase):
 
         self.hooks = HookRegistry()
 
+        self._plugin_registry = _PluginRegistry(self)
+
         self._interrupt_state = _InterruptState()
 
         # Initialize lock for guarding concurrent invocations
         # Using threading.Lock instead of asyncio.Lock because run_async() creates
         # separate event loops in different threads, so asyncio.Lock wouldn't work
         self._invocation_lock = threading.Lock()
+        self._concurrent_invocation_mode = concurrent_invocation_mode
 
         # In the future, we'll have a RetryStrategy base class but until
         # that API is determined we only allow ModelRetryStrategy
@@ -302,6 +320,11 @@ class Agent(AgentBase):
         if hooks:
             for hook in hooks:
                 self.hooks.add_hook(hook)
+
+        if plugins:
+            for plugin in plugins:
+                self._plugin_registry.add_and_init(plugin)
+
         self.hooks.invoke_callbacks(AgentInitializedEvent(agent=self))
 
     @property
@@ -567,6 +590,60 @@ class Agent(AgentBase):
         """
         self.tool_registry.cleanup()
 
+    def add_hook(
+        self, callback: HookCallback[TEvent], event_type: type[TEvent] | list[type[TEvent]] | None = None
+    ) -> None:
+        """Register a callback function for a specific event type.
+
+        This method supports multiple call patterns:
+        1. ``add_hook(callback)`` - Event type inferred from callback's type hint
+        2. ``add_hook(callback, event_type)`` - Event type specified explicitly
+        3. ``add_hook(callback, [TypeA, TypeB])`` - Register for multiple event types
+
+        When the callback's type hint is a union type (``A | B`` or ``Union[A, B]``),
+        the callback is automatically registered for each event type in the union.
+
+        Callbacks can be either synchronous or asynchronous functions.
+
+        Args:
+            callback: The callback function to invoke when events of this type occur.
+            event_type: The class type(s) of events this callback should handle.
+                Can be a single type, a list of types, or None to infer from
+                the callback's first parameter type hint. If a list is provided,
+                the callback is registered for each type in the list.
+
+        Raises:
+            ValueError: If event_type is not provided and cannot be inferred from
+                the callback's type hints, or if the event_type list is empty.
+
+        Example:
+            ```python
+            def log_model_call(event: BeforeModelCallEvent) -> None:
+                print(f"Calling model for agent: {event.agent.name}")
+
+            agent = Agent()
+
+            # With event type inferred from type hint
+            agent.add_hook(log_model_call)
+
+            # With explicit event type
+            agent.add_hook(log_model_call, BeforeModelCallEvent)
+
+            # With union type hint (registers for all types)
+            def log_event(event: BeforeModelCallEvent | AfterModelCallEvent) -> None:
+                print(f"Event: {type(event).__name__}")
+            agent.add_hook(log_event)
+
+            # With list of event types
+            def multi_handler(event) -> None:
+                print(f"Event: {type(event).__name__}")
+            agent.add_hook(multi_handler, [BeforeModelCallEvent, AfterModelCallEvent])
+            ```
+        Docs:
+            https://strandsagents.com/latest/documentation/docs/user-guide/concepts/agents/hooks/
+        """
+        self.hooks.add_callback(event_type, callback)
+
     def __del__(self) -> None:
         """Clean up resources when agent is garbage collected."""
         # __del__ is called even when an exception is thrown in the constructor,
@@ -622,14 +699,15 @@ class Agent(AgentBase):
                     yield event["data"]
             ```
         """
-        # Acquire lock to prevent concurrent invocations
+        # Conditionally acquire lock based on concurrent_invocation_mode
         # Using threading.Lock instead of asyncio.Lock because run_async() creates
         # separate event loops in different threads
-        acquired = self._invocation_lock.acquire(blocking=False)
-        if not acquired:
-            raise ConcurrencyException(
-                "Agent is already processing a request. Concurrent invocations are not supported."
-            )
+        if self._concurrent_invocation_mode == ConcurrentInvocationMode.THROW:
+            lock_acquired = self._invocation_lock.acquire(blocking=False)
+            if not lock_acquired:
+                raise ConcurrencyException(
+                    "Agent is already processing a request. Concurrent invocations are not supported."
+                )
 
         try:
             self._interrupt_state.resume(prompt)
@@ -678,7 +756,8 @@ class Agent(AgentBase):
                     raise
 
         finally:
-            self._invocation_lock.release()
+            if self._invocation_lock.locked():
+                self._invocation_lock.release()
 
     async def _run_loop(
         self,
